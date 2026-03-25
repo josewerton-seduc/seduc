@@ -96,7 +96,7 @@ function CardGerencia({ gerencia }) {
   const [expandido, setExpandido] = useState(false)
   const navigate = useNavigate()
   const textoLongo = gerencia.descricao.length > 100
-  const clicavel = gerencia.id === 7 || gerencia.id === 6  // ← Rede Física e Terceirizadas
+  const clicavel = gerencia.id === 7 || gerencia.id === 6  || gerencia.id === 5 || gerencia.id === 1 // ← Rede Física e Terceirizadas e Jurídica
 
   return (
     <div
@@ -111,6 +111,8 @@ function CardGerencia({ gerencia }) {
       onClick={() => {
         if (gerencia.id === 7) navigate("/rede-fisica")
         if (gerencia.id === 6) navigate("/gg-terceirizadas")
+        if (gerencia.id === 5) navigate("/gg-juridica")
+        if (gerencia.id === 1) navigate("/gg-alimentacao")
       }}
     >
       <div style={styles.cardIconeWrapper}>
