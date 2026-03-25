@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom"
 
-function Header({ titulo, sub, extra }) {
+function Header({ titulo, sub, extra, cor = "#2d6a2d" }) {
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -15,24 +15,31 @@ function Header({ titulo, sub, extra }) {
         </svg>
       )
     }
-    // ← novos ícones de navegação entram aqui futuramente
-    // exemplo:
-    // { path: "/relatorios", titulo: "Relatórios", icone: <svg>...</svg> }
   ]
+
+  // cor mais clarinha pra fundo e borda (ex: azul vira azul bem claro)
+  const corClara = cor + "22"
+  const corBorda = cor + "55"
 
   return (
     <div style={styles.header}>
 
-      {/* ESQUERDA — informações da página atual */}
+      {/* ESQUERDA */}
       <div style={styles.esquerda}>
-        <div style={styles.chevron} />
+        <div style={{
+          width: "6px",
+          height: "36px",
+          background: cor,
+          borderRadius: "3px",
+          flexShrink: 0
+        }} />
         <div>
           <h1 style={styles.titulo}>{titulo}</h1>
           {sub && <p style={styles.sub}>{sub}</p>}
         </div>
       </div>
 
-      {/* CENTRO — ícones de navegação */}
+      {/* CENTRO */}
       <div style={styles.centro}>
         {navItens.map(item => {
           const ativo = location.pathname === item.path
@@ -43,14 +50,14 @@ function Header({ titulo, sub, extra }) {
               onClick={() => navigate(item.path)}
               style={{
                 ...styles.navBtn,
-                background: ativo ? "#f0f7f0" : "transparent",
-                color: ativo ? "#2d6a2d" : "#888",
-                border: ativo ? "1px solid #c8e0c8" : "1px solid transparent"
+                background: ativo ? corClara : "transparent",
+                color: ativo ? cor : "#888",
+                border: ativo ? `1px solid ${corBorda}` : "1px solid transparent"
               }}
               onMouseEnter={e => {
                 if (!ativo) {
                   e.currentTarget.style.background = "#f7f7f7"
-                  e.currentTarget.style.color = "#2d6a2d"
+                  e.currentTarget.style.color = cor
                 }
               }}
               onMouseLeave={e => {
@@ -67,16 +74,16 @@ function Header({ titulo, sub, extra }) {
         })}
       </div>
 
-      {/* DIREITA — extra (ex: data) + logout */}
+      {/* DIREITA */}
       <div style={styles.direita}>
         {extra && <span style={styles.extra}>{extra}</span>}
         <button
-          style={styles.btnSair}
+          style={{ ...styles.btnSair, border: `1px solid ${corBorda}`, color: cor }}
           onClick={() => navigate("/")}
-          onMouseEnter={e => e.currentTarget.style.background = "#f0f7f0"}
+          onMouseEnter={e => e.currentTarget.style.background = corClara}
           onMouseLeave={e => e.currentTarget.style.background = "transparent"}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d6a2d" strokeWidth="2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={cor} strokeWidth="2">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
             <polyline points="16 17 21 12 16 7"/>
             <line x1="21" y1="12" x2="9" y2="12"/>
@@ -96,28 +103,19 @@ const styles = {
     padding: "0 2.5rem",
     height: "64px",
     display: "grid",
-    gridTemplateColumns: "1fr auto 1fr",  // ← esquerda | centro | direita
+    gridTemplateColumns: "1fr auto 1fr",
     alignItems: "center",
     boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-    position: "fixed",   // ← congela no topo
-    top: 0,              // ← distância do topo
-    left: 0,             // ← da borda esquerda
-    right: 0,            // ← até a borda direita
-    zIndex: 100          // ← fica acima de tudo
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100
   },
-
-  // ESQUERDA
   esquerda: {
     display: "flex",
     alignItems: "center",
     gap: "14px"
-  },
-  chevron: {
-    width: "6px",
-    height: "36px",
-    background: "#2d6a2d",
-    borderRadius: "3px",
-    flexShrink: 0
   },
   titulo: {
     fontSize: "16px",
@@ -132,8 +130,6 @@ const styles = {
     color: "#888",
     margin: 0
   },
-
-  // CENTRO
   centro: {
     display: "flex",
     alignItems: "center",
@@ -156,8 +152,6 @@ const styles = {
     fontWeight: "500",
     lineHeight: 1
   },
-
-  // DIREITA
   direita: {
     display: "flex",
     alignItems: "center",
@@ -175,9 +169,7 @@ const styles = {
     gap: "6px",
     padding: "8px 16px",
     borderRadius: "8px",
-    border: "1px solid #c8e0c8",
     background: "transparent",
-    color: "#2d6a2d",
     fontSize: "13px",
     fontWeight: "500",
     cursor: "pointer",
