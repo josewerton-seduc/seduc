@@ -4,6 +4,7 @@ import DashboardPage from "./pages/DashboardPage"
 import RedeFisicaPage from "./pages/RedeFisicaPage"
 import GGTerceirizadasPage from "./pages/GGTerceirizadasPage"
 import GGJuridicaPage from "./pages/GGJuridicaPage"
+import GGAlimentacaoPage from "./pages/GGAlimentacaoPage"
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
         <Route path="/rede-fisica" element={<RedeFisicaPage />} />
         <Route path="/gg-terceirizadas" element={<GGTerceirizadasPage />} />
         <Route path="/gg-juridica" element={<GGJuridicaPage />} />
+        <Route path="/gg-alimentacao" element={<GGAlimentacaoPage />} />
       </Routes>
     </BrowserRouter>
   )
