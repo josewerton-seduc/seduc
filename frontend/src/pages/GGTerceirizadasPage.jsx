@@ -123,7 +123,7 @@ export default function GGTerceirizadasPage() {
       <main style={{ padding: "28px 32px 52px" }}>
 
         {/* KPIs */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", paddingTop: "calc(64px)", gap: 16, marginBottom: 24 }}>
           {kpis.map(k => (
             <div key={k.label} style={{
               background: "#fff", borderRadius: 14, padding: "18px 20px",
