@@ -5,7 +5,7 @@ import RedeFisicaPage from "./pages/RedeFisicaPage"
 import GGTerceirizadasPage from "./pages/GGTerceirizadasPage"
 import GGJuridicaPage from "./pages/GGJuridicaPage"
 import GGAlimentacaoPage from "./pages/GGAlimentacaoPage"
-import GGOrganizacaoEscolasPage from "./pages/GGOrganizacaoEscolarPage"
+import GGOrganizacaoEscolarPage from "./pages/GGOrganizacaoEscolarPage"
 
 function App() {
   return (
@@ -17,7 +17,7 @@ function App() {
         <Route path="/gg-terceirizadas" element={<GGTerceirizadasPage />} />
         <Route path="/gg-juridica" element={<GGJuridicaPage />} />
         <Route path="/gg-alimentacao" element={<GGAlimentacaoPage />} />
-        <Route path="/gg-organizacao-escolar" element={<GGOrganizacaoEscolasPage />} />
+        <Route path="/gg-organizacao-escolar" element={<GGOrganizacaoEscolarPage />} />
       </Routes>
     </BrowserRouter>
   )
