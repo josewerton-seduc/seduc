@@ -1,6 +1,6 @@
 function GGOrganizacaoEscolarPage() {
   return (
-    <div>Em construção</div>
+    <div>EM CONSTRUÇÃO</div>
   )
 }
 
