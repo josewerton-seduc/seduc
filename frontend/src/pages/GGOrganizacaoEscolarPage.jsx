@@ -1,15 +1,19 @@
 import { useState, useEffect } from "react"
 import Header from "../components/Header"
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend, LineChart, Line
+} from "recharts"
 
 const COR = "#2d6a4f"
 const COR_CLARA = "#f0f7f2"
 const COR_BORDA = "#a8d5b5"
 
 const kpis = [
-  { label: "Unidades Escolares", valor: 142, icon: "🏫", variacao: "rede completa"     },
-  { label: "Matrículas Ativas",  valor: "18.2k", icon: "📋", variacao: "ano letivo 2026" },
-  { label: "Em Busca Ativa",     valor: 134, icon: "🔍", variacao: "crianças localizadas" },
-  { label: "Rotas de Transporte",valor: 38,  icon: "🚌", variacao: "em operação"       },
+  { label: "Unidades Escolares",  valor: 142,    icon: "🏫", variacao: "rede completa"        },
+  { label: "Matrículas Ativas",   valor: "18.2k", icon: "📋", variacao: "ano letivo 2026"      },
+  { label: "Em Busca Ativa",      valor: 134,    icon: "🔍", variacao: "crianças localizadas"  },
+  { label: "Rotas de Transporte", valor: 38,     icon: "🚌", variacao: "em operação"           },
 ]
 
 const setores = ["Todos", "Transporte", "Matrícula", "Busca Ativa", "Infraestrutura", "Planejamento"]
@@ -40,95 +44,40 @@ const setorStyle = {
   "Planejamento":   { bg: "#fff7ed", cor: "#c2410c" },
 }
 
-// Gráfico de rosca igual ao BI
-function RoscaChart({ sim, nao, titulo, legSim = "SIM", legNao = "NÃO" }) {
-  const total = sim + nao
-  const pctSim = sim / total
-  const pctNao = nao / total
-  const r = 70, cx = 90, cy = 90, inner = 42
-  const circ = 2 * Math.PI * r
+const dadosBarras = [
+  { setor: "Transporte",     concluido: 31, pendente: 7  },
+  { setor: "Matrícula",      concluido: 238, pendente: 7 },
+  { setor: "Busca Ativa",    concluido: 98, pendente: 36 },
+  { setor: "Infra",          concluido: 7,  pendente: 5  },
+  { setor: "Planejamento",   concluido: 14, pendente: 4  },
+]
 
-  const simDash = pctSim * circ
-  const naoDash = pctNao * circ
+const evolucaoMatriculas = [
+  { mes: "Jan", cmei: 5100, em: 9400, eti: 3200 },
+  { mes: "Fev", mes2: "Fev", cmei: 5150, em: 9500, eti: 3250 },
+  { mes: "Mar", cmei: 5200, em: 9800, eti: 3400 },
+  { mes: "Abr", cmei: 5180, em: 9750, eti: 3380 },
+  { mes: "Mai", cmei: 5220, em: 9900, eti: 3420 },
+  { mes: "Jun", cmei: 5250, em: 10100, eti: 3500 },
+]
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: COR, marginBottom: 12, textAlign: "center" }}>{titulo}</div>
-      <div style={{ position: "relative" }}>
-        <svg width="180" height="180" viewBox="0 0 180 180">
-          {/* fundo */}
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e5e7eb" strokeWidth="26" />
-          {/* SIM — verde */}
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#4a7c59" strokeWidth="26"
-            strokeDasharray={`${simDash} ${circ}`}
-            strokeDashoffset={circ * 0.25}
-            strokeLinecap="butt" />
-          {/* NÃO — marrom */}
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke="#9ae097" strokeWidth="26"
-            strokeDasharray={`${naoDash} ${circ}`}
-            strokeDashoffset={circ * 0.25 - simDash}
-            strokeLinecap="butt" />
-          {/* labels nas fatias */}
-          <text x={cx - 28} y={cy - 18} textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">
-            {nao} ({Math.round(pctNao * 100)}%)
-          </text>
-          <text x={cx + 30} y={cy + 22} textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">
-            {sim} ({Math.round(pctSim * 100)}%)
-          </text>
-        </svg>
+const TooltipCustom = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div style={{ background: "#fff", border: `1px solid ${COR_BORDA}`, borderRadius: 10, padding: "10px 16px", fontSize: 12, boxShadow: "0 4px 12px #2d6a4f22" }}>
+        <div style={{ fontWeight: 700, color: COR, marginBottom: 6 }}>{label}</div>
+        {payload.map(p => (
+          <div key={p.name} style={{ color: p.color }}>● {p.name}: <b>{p.value}</b></div>
+        ))}
       </div>
-      {/* legenda */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8, alignSelf: "flex-end", marginRight: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: "#334155", marginBottom: 2 }}>Possui</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 12, height: 12, borderRadius: "50%", background: "#4a7c59", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: "#475569" }}>{legSim}</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 12, height: 12, borderRadius: "50%", background: "#9ae097", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: "#475569" }}>{legNao}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function BarrasSetor() {
-  const dados = [
-    { label: "Transporte",     total: 38, ok: 31 },
-    { label: "Matrícula",      total: 245, ok: 238 },
-    { label: "Busca Ativa",    total: 134, ok: 98 },
-    { label: "Infraestrutura", total: 12, ok: 7 },
-    { label: "Planejamento",   total: 18, ok: 14 },
-  ]
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {dados.map(d => {
-        const pct = Math.round((d.ok / d.total) * 100)
-        return (
-          <div key={d.label}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#1a3a2a" }}>{d.label}</span>
-              <span style={{ fontSize: 11, color: "#94a3b8" }}>{d.ok}/{d.total} concluídos</span>
-            </div>
-            <div style={{ background: "#d1fae5", borderRadius: 8, height: 10, overflow: "hidden" }}>
-              <div style={{
-                width: `${pct}%`, height: "100%",
-                background: pct >= 80 ? COR : pct >= 60 ? "#f97316" : "#ef4444",
-                borderRadius: 8,
-              }} />
-            </div>
-            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>{pct}% concluído</div>
-          </div>
-        )
-      })}
-    </div>
-  )
+    )
+  }
+  return null
 }
 
 export default function GGOrganizacaoPage() {
   const [filtroSetor, setFiltroSetor] = useState("Todos")
-  const [dadosPlanilha, setDadosPlanilha] = useState([])
+  const [dadosCmei, setDadosCmei] = useState({ sim: 0, nao: 0 })
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
@@ -136,19 +85,36 @@ export default function GGOrganizacaoPage() {
     fetch(url)
       .then(r => r.text())
       .then(csv => {
-        const linhas = csv.trim().split("\n").slice(1) // pula cabeçalho
-        const dados = linhas.map(l => {
+        const linhas = csv.trim().split("\n").slice(1)
+        let sim = 0, nao = 0
+        linhas.forEach(l => {
           const cols = l.split(",")
-          return { bairro: cols[0]?.trim(), possui: cols[1]?.trim() }
-        }).filter(d => d.bairro)
-        setDadosPlanilha(dados)
+          const val = cols[1]?.trim().toUpperCase().replace(/[^A-Z]/g, "")
+          if (val === "SIM") sim++
+          else if (val === "NAO" || val === "NO") nao++
+        })
+        setDadosCmei({ sim, nao })
         setCarregando(false)
       })
       .catch(() => setCarregando(false))
   }, [])
 
-  const sim = dadosPlanilha.filter(d => d.possui?.toUpperCase() === "SIM").length
-  const nao = dadosPlanilha.filter(d => d.possui?.toUpperCase() === "NÃO" || d.possui?.toUpperCase() === "NAO").length
+  const pizzaCmei = [
+    { name: "Com CMEI",    value: dadosCmei.sim || 22 },
+    { name: "Sem CMEI",    value: dadosCmei.nao || 18 },
+  ]
+  const pizzaEm = [
+    { name: "Com EM",  value: 31 },
+    { name: "Sem EM",  value: 9  },
+  ]
+  const pizzaEti = [
+    { name: "Com ETI", value: 14 },
+    { name: "Sem ETI", value: 26 },
+  ]
+
+  const CORES_CMEI = ["#2d6a4f", "#a8d5b5"]
+  const CORES_EM   = ["#1d7fc4", "#bae6fd"]
+  const CORES_ETI  = ["#7c3371", "#d4a0ce"]
 
   const atividadesFiltradas = filtroSetor === "Todos"
     ? atividades
@@ -184,46 +150,112 @@ export default function GGOrganizacaoPage() {
           ))}
         </div>
 
-        {/* GRÁFICOS */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
-
-          {/* Rosca CMEI — dados reais da planilha */}
-          <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${COR}11`, display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: COR, marginBottom: 4, alignSelf: "flex-start" }}>📊 Dados da Planilha</div>
-            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 16, alignSelf: "flex-start" }}>Bairros da Sede com CMEIs</div>
-            {carregando ? (
-              <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 40 }}>Carregando planilha...</div>
-            ) : sim + nao > 0 ? (
-              <RoscaChart sim={sim} nao={nao} titulo="Proporção dos Bairros da Sede com CMEIs" />
-            ) : (
-              <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 40 }}>Não foi possível carregar os dados.</div>
-            )}
-          </div>
-
-          {/* Rosca EM — fictício */}
-          <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${COR}11`, display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: COR, marginBottom: 4, alignSelf: "flex-start" }}>📊 Exemplo Fictício</div>
-            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 16, alignSelf: "flex-start" }}>Bairros da Sede com EMs</div>
-            <RoscaChart sim={31} nao={9} titulo="Proporção dos Bairros da Sede com EMs" />
-          </div>
-
-          {/* Rosca ETI — fictício */}
-          <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${COR}11`, display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: COR, marginBottom: 4, alignSelf: "flex-start" }}>📊 Exemplo Fictício</div>
-            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 16, alignSelf: "flex-start" }}>Bairros da Sede com ETIs</div>
-            <RoscaChart sim={14} nao={26} titulo="Proporção dos Bairros da Sede com ETIs" />
-          </div>
-
-        </div>
-
-        {/* Progresso por setor */}
+        {/* ROSCAS — bairros com escolas */}
         <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${COR}11`, marginBottom: 24 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: COR, marginBottom: 4 }}>Progresso por Setor</div>
-          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 20 }}>Demandas concluídas vs. total por área</div>
-          <BarrasSetor />
+          <div style={{ fontWeight: 700, fontSize: 14, color: COR, marginBottom: 4 }}>Cobertura Escolar por Bairro</div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 20 }}>Proporção dos bairros da sede que possuem cada tipo de escola</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
+
+            {/* CMEI — dados reais */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: COR, marginBottom: 8 }}>
+                CMEIs {carregando ? "⏳" : "📊"}
+              </div>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={pizzaCmei} cx="50%" cy="50%" innerRadius={50} outerRadius={80}
+                    paddingAngle={3} dataKey="value" animationBegin={0} animationDuration={800}
+                    label={({ name, percent }) => `${Math.round(percent * 100)}%`}
+                    labelLine={false}
+                  >
+                    {pizzaCmei.map((_, i) => <Cell key={i} fill={CORES_CMEI[i]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => [v, "bairros"]} />
+                  <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+              {!carregando && dadosCmei.sim === 0 && (
+                <div style={{ fontSize: 10, color: "#94a3b8", textAlign: "center" }}>Usando dados de exemplo</div>
+              )}
+            </div>
+
+            {/* EM — fictício */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "#1d7fc4", marginBottom: 8 }}>EMs (Exemplo)</div>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={pizzaEm} cx="50%" cy="50%" innerRadius={50} outerRadius={80}
+                    paddingAngle={3} dataKey="value" animationBegin={200} animationDuration={800}
+                    label={({ name, percent }) => `${Math.round(percent * 100)}%`}
+                    labelLine={false}
+                  >
+                    {pizzaEm.map((_, i) => <Cell key={i} fill={CORES_EM[i]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => [v, "bairros"]} />
+                  <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* ETI — fictício */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: "#7c3371", marginBottom: 8 }}>ETIs (Exemplo)</div>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={pizzaEti} cx="50%" cy="50%" innerRadius={50} outerRadius={80}
+                    paddingAngle={3} dataKey="value" animationBegin={400} animationDuration={800}
+                    label={({ name, percent }) => `${Math.round(percent * 100)}%`}
+                    labelLine={false}
+                  >
+                    {pizzaEti.map((_, i) => <Cell key={i} fill={CORES_ETI[i]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => [v, "bairros"]} />
+                  <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
 
-        {/* ATIVIDADES */}
+        {/* GRÁFICOS LINHA + BARRAS */}
+        <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 20, marginBottom: 24 }}>
+
+          {/* Linha — evolução matrículas */}
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${COR}11` }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: COR, marginBottom: 2 }}>Evolução de Matrículas</div>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 16 }}>Por tipo de escola ao longo do ano</div>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={evolucaoMatriculas}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0f0e8" />
+                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#64748b" }} />
+                <YAxis tick={{ fontSize: 10, fill: "#64748b" }} />
+                <Tooltip content={<TooltipCustom />} />
+                <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                <Line type="monotone" dataKey="cmei" name="CMEI" stroke="#2d6a4f" strokeWidth={2.5} dot={{ r: 4 }} animationDuration={800} />
+                <Line type="monotone" dataKey="em"   name="EM"   stroke="#1d7fc4" strokeWidth={2.5} dot={{ r: 4 }} animationDuration={1000} />
+                <Line type="monotone" dataKey="eti"  name="ETI"  stroke="#7c3371" strokeWidth={2.5} dot={{ r: 4 }} animationDuration={1200} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Barras — progresso por setor */}
+          <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${COR}11` }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: COR, marginBottom: 2 }}>Progresso por Setor</div>
+            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 16 }}>Demandas concluídas vs. pendentes</div>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={dadosBarras} layout="vertical" barGap={4}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0f0e8" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: "#64748b" }} />
+                <YAxis dataKey="setor" type="category" tick={{ fontSize: 10, fill: "#64748b" }} width={80} />
+                <Tooltip content={<TooltipCustom />} />
+                <Bar dataKey="concluido" name="Concluído" fill={COR}       radius={[0,6,6,0]} stackId="a" />
+                <Bar dataKey="pendente"  name="Pendente"  fill="#a8d5b5"   radius={[0,6,6,0]} stackId="a" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* TABELA */}
         <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${COR}11` }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
             <div>
@@ -242,7 +274,6 @@ export default function GGOrganizacaoPage() {
               ))}
             </div>
           </div>
-
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: `2px solid ${COR_CLARA}` }}>
@@ -255,18 +286,12 @@ export default function GGOrganizacaoPage() {
               {atividadesFiltradas.map((a, i) => (
                 <tr key={i} style={{ borderBottom: `1px solid ${COR_CLARA}` }}>
                   <td style={{ padding: "12px" }}>
-                    <span style={{
-                      background: setorStyle[a.setor]?.bg, color: setorStyle[a.setor]?.cor,
-                      borderRadius: 20, padding: "3px 12px", fontSize: 11, fontWeight: 600,
-                    }}>{a.setor}</span>
+                    <span style={{ background: setorStyle[a.setor]?.bg, color: setorStyle[a.setor]?.cor, borderRadius: 20, padding: "3px 12px", fontSize: 11, fontWeight: 600 }}>{a.setor}</span>
                   </td>
                   <td style={{ padding: "12px", fontSize: 13, color: "#334155" }}>{a.descricao}</td>
                   <td style={{ padding: "12px", fontSize: 12, color: "#64748b" }}>{a.data}</td>
                   <td style={{ padding: "12px" }}>
-                    <span style={{
-                      background: statusStyle[a.status]?.bg, color: statusStyle[a.status]?.cor,
-                      borderRadius: 20, padding: "3px 14px", fontSize: 11, fontWeight: 600,
-                    }}>{a.status}</span>
+                    <span style={{ background: statusStyle[a.status]?.bg, color: statusStyle[a.status]?.cor, borderRadius: 20, padding: "3px 14px", fontSize: 11, fontWeight: 600 }}>{a.status}</span>
                   </td>
                 </tr>
               ))}

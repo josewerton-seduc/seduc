@@ -7,6 +7,8 @@ import GGJuridicaPage from "./pages/GGJuridicaPage"
 import GGAlimentacaoPage from "./pages/GGAlimentacaoPage"
 import GGOrganizacaoEscolarPage from "./pages/GGOrganizacaoEscolarPage"
 import GGCARFPage from "./pages/GGCARFPage"
+import GGCentroDistribuicaoPage from "./pages/GGCentroDistribuicaoPage"
+import GGFinanceiraPage from "./pages/GGFinanceiraPage"
 
 function App() {
   return (
@@ -20,6 +22,8 @@ function App() {
         <Route path="/gg-alimentacao" element={<GGAlimentacaoPage />} />
         <Route path="/gg-organizacao-escolar" element={<GGOrganizacaoEscolarPage />} />
         <Route path="/ggcarf" element={<GGCARFPage />} />
+        <Route path="/gg-centro-distribuicao" element={<GGCentroDistribuicaoPage />} />
+        <Route path="/gg-financeira" element={<GGFinanceiraPage />} />
       </Routes>
     </BrowserRouter>
   )
