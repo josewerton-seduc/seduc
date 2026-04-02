@@ -89,9 +89,9 @@ export default function GGOrganizacaoPage() {
         let sim = 0, nao = 0
         linhas.forEach(l => {
           const cols = l.split(",")
-          const val = cols[1]?.trim().toUpperCase().replace(/[^A-Z]/g, "")
+          const val = cols[2]?.trim().toUpperCase().replace(/[^A-Z]/g, "")
           if (val === "SIM") sim++
-          else if (val === "NAO" || val === "NO") nao++
+          else if (val === "NAO") nao++
         })
         setDadosCmei({ sim, nao })
         setCarregando(false)
