@@ -6,3 +6,4 @@ asyncpg
 python-dotenv
 pydantic[email]
 passlib[bcrypt]
+httpx
