@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Header from "../components/Header"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -12,7 +12,6 @@ const COR_BORDA = "#7dd3fc"
 const URL_CARGOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3cjaQkwTjVu0afPbZR8_whTAr1XJ50VFHRoZNliFE79Gp6Y4QTPXO_wH-b_l7x1xgZao1AB2wiZRD/pub?gid=538631305&single=true&output=csv"
 const URL_INDICACOES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ3cjaQkwTjVu0afPbZR8_whTAr1XJ50VFHRoZNliFE79Gp6Y4QTPXO_wH-b_l7x1xgZao1AB2wiZRD/pub?gid=890440053&single=true&output=csv"
 
-// Parser CSV robusto — lida com quebras de linha e vírgulas dentro de campos
 function parseCSV(csv) {
   const records = []
   let current = [], field = "", inQ = false
@@ -106,19 +105,15 @@ function parseCargos(csv) {
 
 function parseIndicacoes(csv) {
   const records = parseCSV(csv)
-  // Pula cabeçalho (linha 0)
   const dados = records.slice(1).filter(r => r[0] && r[0].trim() !== "")
-  
-  // Conta situações
   const situacoes = {}
   const instituicoes = {}
   const funcoes = {}
-  
+
   dados.forEach(r => {
     const situacao = (r[8] || "").trim().toUpperCase() || "NÃO DEFINIDO"
     const instituicao = (r[4] || "").trim().toUpperCase() || "NÃO DEFINIDO"
     const funcao = (r[3] || "").trim() || "NÃO DEFINIDO"
-    
     situacoes[situacao] = (situacoes[situacao] || 0) + 1
     if (instituicao !== "NÃO DEFINIDO" && instituicao !== "") {
       instituicoes[instituicao] = (instituicoes[instituicao] || 0) + 1
@@ -162,6 +157,13 @@ export default function GGTerceirizadasPage() {
   const [filtroEmpresa, setFiltroEmpresa] = useState("Todas")
   const [filtroPartido, setFiltroPartido] = useState("Todos")
 
+  // ── ref para o quadro geral de cargos ─────────────────────
+  const quadroRef = useRef(null)
+
+  const scrollParaQuadro = () => {
+    quadroRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
   useEffect(() => {
     Promise.all([
       fetch(URL_CARGOS).then(r => r.text()),
@@ -196,10 +198,34 @@ export default function GGTerceirizadasPage() {
 
   // ── KPIs ───────────────────────────────────────────────────
   const kpis = [
-    { label: "Total de Vagas",      valor: totais.qtd.toLocaleString("pt-BR"),    icon: "📋", variacao: "vagas no edital" },
-    { label: "Vagas Livres",        valor: totais.livres,                          icon: "🟢", variacao: "disponíveis agora" },
-    { label: "Contratados",         valor: totais.contrat.toLocaleString("pt-BR"), icon: "✅", variacao: "em exercício" },
-    { label: "Aguardando Processo", valor: totais.aguPMC + totais.aguEmp,          icon: "⏳", variacao: `${totais.aguPMC} PMC · ${totais.aguEmp} empresa` },
+    {
+      label: "Total de Vagas",
+      valor: totais.qtd.toLocaleString("pt-BR"),
+      icon: "📋",
+      variacao: "vagas no edital",
+      clicavel: false,
+    },
+    {
+      label: "Vagas Livres",
+      valor: totais.livres,
+      icon: "🟢",
+      variacao: "disponíveis agora",
+      clicavel: true,
+    },
+    {
+      label: "Contratados",
+      valor: totais.contrat.toLocaleString("pt-BR"),
+      icon: "✅",
+      variacao: "em exercício",
+      clicavel: false,
+    },
+    {
+      label: "Aguardando Processo",
+      valor: totais.aguPMC + totais.aguEmp,
+      icon: "⏳",
+      variacao: `${totais.aguPMC} PMC · ${totais.aguEmp} empresa`,
+      clicavel: false,
+    },
   ]
 
   // ── Por empresa ────────────────────────────────────────────
@@ -239,13 +265,48 @@ export default function GGTerceirizadasPage() {
         {/* KPIs */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
           {kpis.map(k => (
-            <div key={k.label} style={{ background: "#fff", borderRadius: 14, padding: "18px 20px", boxShadow: `0 2px 12px ${COR}18`, borderLeft: `4px solid ${COR}`, display: "flex", alignItems: "center", gap: 14 }}>
+            <div
+              key={k.label}
+              onClick={k.clicavel ? scrollParaQuadro : undefined}
+              style={{
+                background: "#fff",
+                borderRadius: 14,
+                padding: "18px 20px",
+                boxShadow: `0 2px 12px ${COR}18`,
+                borderLeft: `4px solid ${COR}`,
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                cursor: k.clicavel ? "pointer" : "default",
+                transition: k.clicavel ? "transform 0.15s, box-shadow 0.15s" : undefined,
+                ...(k.clicavel ? { ":hover": { transform: "translateY(-2px)" } } : {}),
+              }}
+              onMouseEnter={k.clicavel ? e => {
+                e.currentTarget.style.transform = "translateY(-2px)"
+                e.currentTarget.style.boxShadow = `0 6px 20px ${COR}33`
+              } : undefined}
+              onMouseLeave={k.clicavel ? e => {
+                e.currentTarget.style.transform = "translateY(0)"
+                e.currentTarget.style.boxShadow = `0 2px 12px ${COR}18`
+              } : undefined}
+            >
               <span style={{ fontSize: 28 }}>{k.icon}</span>
               <div>
                 <div style={{ fontSize: 26, fontWeight: 800, color: COR }}>{k.valor}</div>
                 <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>{k.label}</div>
-                <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>{k.variacao}</div>
+                <div style={{
+                  fontSize: 10,
+                  color: "#94a3b8",        // Fixado na cor cinza dos outros cards
+                  marginTop: 2,
+                  fontWeight: 400,         // Removido o negrito (600)
+                  textDecoration: "none",  // Removido o underline
+                }}>
+                  {k.variacao}
+                </div>
               </div>
+              {k.clicavel && (
+                <span style={{ marginLeft: "auto", fontSize: 14, color: COR, opacity: 0.6 }}>↓</span>
+              )}
             </div>
           ))}
         </div>
@@ -266,10 +327,10 @@ export default function GGTerceirizadasPage() {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
                   {[
-                    { label: "Total", valor: e.qtd.toLocaleString("pt-BR"), cor: corEmp },
-                    { label: "Contratados", valor: e.contrat.toLocaleString("pt-BR"), cor: "#15803d" },
-                    { label: "Livres", valor: e.livres, cor: e.livres > 0 ? "#f97316" : "#94a3b8" },
-                    { label: "Aguardando", valor: e.aguPMC + e.aguEmp, cor: "#a16207" },
+                    { label: "Total",      valor: e.qtd.toLocaleString("pt-BR"),      cor: corEmp         },
+                    { label: "Contratados",valor: e.contrat.toLocaleString("pt-BR"),   cor: "#15803d"      },
+                    { label: "Livres",     valor: e.livres,                            cor: e.livres > 0 ? "#f97316" : "#94a3b8" },
+                    { label: "Aguardando", valor: e.aguPMC + e.aguEmp,                cor: "#a16207"      },
                   ].map(item => (
                     <div key={item.label} style={{ background: "#f8faff", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
                       <div style={{ fontSize: 20, fontWeight: 800, color: item.cor }}>{item.valor}</div>
@@ -277,7 +338,6 @@ export default function GGTerceirizadasPage() {
                     </div>
                   ))}
                 </div>
-                {/* Barra de progresso */}
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                     <span style={{ fontSize: 11, color: "#64748b" }}>Ocupação das vagas</span>
@@ -295,8 +355,6 @@ export default function GGTerceirizadasPage() {
         {/* INDICAÇÕES — situação + por instituição */}
         {indicacoes && (
           <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20, marginBottom: 24 }}>
-
-            {/* Situação dos indicados */}
             <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${COR}11` }}>
               <div style={{ fontWeight: 700, fontSize: 14, color: COR, marginBottom: 2 }}>Situação dos {indicacoes.total.toLocaleString("pt-BR")} Indicados</div>
               <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 16 }}>Status atual de cada indicação registrada</div>
@@ -313,7 +371,6 @@ export default function GGTerceirizadasPage() {
               </ResponsiveContainer>
             </div>
 
-            {/* Por instituição */}
             <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${COR}11` }}>
               <div style={{ fontWeight: 700, fontSize: 14, color: COR, marginBottom: 2 }}>Indicados por Instituição</div>
               <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 16 }}>Distribuição entre CMEI, EM, ETI e SEDUC</div>
@@ -419,8 +476,8 @@ export default function GGTerceirizadasPage() {
           </ResponsiveContainer>
         </div>
 
-        {/* Tabela por empresa */}
-        <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${COR}11` }}>
+        {/* Tabela por empresa — com ref para o scroll */}
+        <div ref={quadroRef} style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${COR}11`, scrollMarginTop: 100 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 14, color: COR }}>Quadro Geral de Cargos por Empresa</div>
