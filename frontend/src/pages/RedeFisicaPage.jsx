@@ -9,8 +9,24 @@ const COR = "#1a3a8f"
 const COR_CLARA = "#f0f4ff"
 const COR_BORDA = "#a0b4f0"
 
-const URL_IDEAL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlwqeOhW2S1rNxrMydAaaHDcde-3jE_akLf7hg2Z3K0wK4UvDcfBlTwiBMnqYG6BI_2PRInY-Xv0XJ/pub?gid=1850294324&single=true&output=csv"
-const URL_TAB8  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlwqeOhW2S1rNxrMydAaaHDcde-3jE_akLf7hg2Z3K0wK4UvDcfBlTwiBMnqYG6BI_2PRInY-Xv0XJ/pub?gid=761726944&single=true&output=csv"
+const URL_IDEAL        = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlwqeOhW2S1rNxrMydAaaHDcde-3jE_akLf7hg2Z3K0wK4UvDcfBlTwiBMnqYG6BI_2PRInY-Xv0XJ/pub?gid=1850294324&single=true&output=csv"
+const URL_TAB8         = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlwqeOhW2S1rNxrMydAaaHDcde-3jE_akLf7hg2Z3K0wK4UvDcfBlTwiBMnqYG6BI_2PRInY-Xv0XJ/pub?gid=761726944&single=true&output=csv"
+
+// Funções extras — total atual confirmado da aba CONSOLIDADO (08/04/2026)
+// Não há quadro ideal definido para estas funções, portanto não é possível calcular faltando/excedente
+const FUNCOES_EXTRAS_DADOS = [
+  { funcao: "Profissional de Apoio",  total: 546 },
+  { funcao: "Monitor de Transp.",     total: 148 },
+  { funcao: "Motorista",              total: 100 },
+  { funcao: "Arte Educador",          total: 84  },
+  { funcao: "Bombeiro Civil",         total: 59  },
+  { funcao: "Op. Carga/Descarga",     total: 58  },
+  { funcao: "Zelador/Manutenção",     total: 57  },
+  { funcao: "Assist. Operacional",    total: 46  },
+  { funcao: "Intérprete de Libras",   total: 30  },
+  { funcao: "Educador Físico",        total: 23  },
+  { funcao: "Nutricionista",          total: 15  },
+]
 
 function parseCSV(csv) {
   const records = []
@@ -248,7 +264,10 @@ export default function RedeFisicaPage(){
   ]
 
   // Altura do gráfico de defasadas: 40px por escola, mínimo 300
+  // Altura total do gráfico interno (38px por escola)
   const alturaDefasadas = Math.max(300, todasDefasadas.length * 38)
+  // Altura visível do container scroll — mostra ~8 escolas por vez
+  const alturaVisivel = 8 * 38
 
   return(
     <div style={{minHeight:"100vh",background:"#f0f4ff",fontFamily:"'Segoe UI',sans-serif",color:"#0c1a4e"}}>
@@ -324,7 +343,7 @@ export default function RedeFisicaPage(){
             {funcoes&&(
               <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
                 <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Funcionários Ativos por Função</div>
-                <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Quadro real de servidores de apoio em toda a rede</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Quadro real de servidores de apoio em toda a rede — funções com comparativo ideal/atual</div>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={funcoes} barCategoryGap="25%">
                     <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
@@ -339,6 +358,26 @@ export default function RedeFisicaPage(){
               </div>
             )}
 
+            {/* Funções extras — somente total atual, sem comparativo com ideal */}
+            <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
+              <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Outras Funções — Total Atual</div>
+              <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>Funções registradas no CONSOLIDADO — <b>não há quadro ideal definido para estas funções</b>, por isso não é possível calcular faltando/excedente</div>
+              <div style={{background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 14px",marginBottom:16,fontSize:11,color:"#92400e"}}>
+                ℹ️ Estes números mostram apenas quantos servidores existem hoje em cada função, sem comparativo com o ideal.
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={FUNCOES_EXTRAS_DADOS} barCategoryGap="25%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
+                  <XAxis dataKey="funcao" tick={{fontSize:9,fill:"#64748b"}} interval={0} angle={-15} textAnchor="end" height={52}/>
+                  <YAxis tick={{fontSize:10,fill:"#64748b"}}/>
+                  <Tooltip formatter={(v)=>[v.toLocaleString("pt-BR"),"servidores"]}/>
+                  <Bar dataKey="total" name="Total atual" radius={[6,6,0,0]} animationDuration={800}>
+                    {FUNCOES_EXTRAS_DADOS.map((_,i)=><Cell key={i} fill={["#94a3b8","#64748b","#475569","#334155","#1e293b","#94a3b8","#64748b","#475569","#334155","#1e293b","#94a3b8"][i]}/>)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
             {/* TODAS as unidades defasadas — scroll interno */}
             <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
               <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>
@@ -346,20 +385,23 @@ export default function RedeFisicaPage(){
               </div>
               <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Ordenadas por maior déficit — role para ver todas</div>
               {/* Container com scroll, mostrando ~10 por vez */}
-              <div style={{overflowY:"auto",maxHeight:420,borderRadius:8,border:`1px solid ${COR_CLARA}`}}>
-                <ResponsiveContainer width="100%" height={alturaDefasadas}>
-                  <BarChart
-                    data={todasDefasadas.map(e=>({nome:e.nome.length>30?e.nome.slice(0,30)+"…":e.nome,faltando:e.faltando,tipo:e.tipo}))}
-                    layout="vertical" barCategoryGap="15%"
-                    margin={{top:8,right:16,left:8,bottom:8}}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false}/>
-                    <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}} position="top"/>
-                    <YAxis dataKey="nome" type="category" tick={{fontSize:9,fill:"#334155"}} width={200}/>
-                    <Tooltip formatter={(v)=>[`-${v} vagas`,"defasagem"]}/>
-                    <Bar dataKey="faltando" name="Vagas faltando" fill="#ef4444" radius={[0,6,6,0]} animationDuration={800}/>
-                  </BarChart>
-                </ResponsiveContainer>
+              {/* Container com scroll vertical — mostra 8 por vez, largura reduzida */}
+              <div style={{display:"flex",justifyContent:"center"}}>
+                <div style={{width:"60%",overflowY:"auto",maxHeight:alturaVisivel,borderRadius:8,border:`1px solid ${COR_CLARA}`}}>
+                  <ResponsiveContainer width="100%" height={alturaDefasadas}>
+                    <BarChart
+                      data={todasDefasadas.map(e=>({nome:e.nome.length>32?e.nome.slice(0,32)+"…":e.nome,faltando:e.faltando,tipo:e.tipo}))}
+                      layout="vertical" barCategoryGap="15%"
+                      margin={{top:8,right:20,left:8,bottom:8}}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false}/>
+                      <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}}/>
+                      <YAxis dataKey="nome" type="category" tick={{fontSize:9,fill:"#334155"}} width={210}/>
+                      <Tooltip formatter={(v)=>[`-${v} vagas`,"defasagem"]}/>
+                      <Bar dataKey="faltando" name="Vagas faltando" fill="#ef4444" radius={[0,6,6,0]} animationDuration={800}/>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
 
@@ -405,8 +447,8 @@ export default function RedeFisicaPage(){
               )}
 
               <div style={{fontSize:11,color:"#64748b",marginBottom:12}}>
-                Exibindo <b>{Math.min(escolasFiltradas.length,50)}</b> de {escolasFiltradas.length} unidades
-                {escolasFiltradas.length>50&&<span style={{color:"#94a3b8"}}> — use os filtros para refinar</span>}
+                Exibindo <b>{escolasFiltradas.length}</b> de {escolasFiltradas.length} unidades
+                
               </div>
 
               <div style={{overflowX:"auto"}}>
@@ -419,7 +461,7 @@ export default function RedeFisicaPage(){
                     </tr>
                   </thead>
                   <tbody>
-                    {escolasFiltradas.slice(0,50).map((e,i)=>(
+                    {escolasFiltradas.map((e,i)=>(
                       <tr key={i} style={{borderBottom:`1px solid ${COR_CLARA}`,background:i%2===0?"#fff":"#f8fbff"}}>
                         <td style={{padding:"9px 10px",textAlign:"center"}}>
                           <span style={{background:COR,color:"#fff",borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700}}>TGS {e.tgs}</span>
