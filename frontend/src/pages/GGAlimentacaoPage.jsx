@@ -125,7 +125,6 @@ export default function GGAlimentacaoPage() {
       <Header
         titulo="GG Alimentação Escolar"
         sub="Painel de acompanhamento nutricional"
-        extra="Março 2026"
         cor={COR}
       />
 

@@ -132,7 +132,6 @@ export default function GGCARFPage() {
       <Header
         titulo="GGCARF"
         sub="Currículo, Avaliação, Resultados Educacionais e Formação"
-        extra="Março 2026"
         cor={COR}
       />
 

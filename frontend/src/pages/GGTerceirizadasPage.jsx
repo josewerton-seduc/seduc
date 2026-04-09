@@ -258,7 +258,7 @@ export default function GGTerceirizadasPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f0f7ff", fontFamily: "'Segoe UI', sans-serif", color: "#0c4a6e" }}>
-      <Header titulo="Gerência Geral das Terceirizadas" sub="Painel de gestão contratual" extra="Março 2026" cor={COR} />
+      <Header titulo="Gerência Geral das Terceirizadas" sub="Painel de gestão contratual" cor={COR} />
 
       <main style={{ padding: "92px 32px 52px" }}>
 

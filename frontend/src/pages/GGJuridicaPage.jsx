@@ -126,7 +126,6 @@ export default function GGJuridicaPage() {
       <Header
         titulo="GG Jurídica"
         sub="Painel de acompanhamento processual"
-        extra="Março 2026"
         cor={COR}
       />
 

@@ -372,7 +372,7 @@ export default function RedeFisicaPage(){
 
   return(
     <div style={{minHeight:"100vh",background:"#f0f4ff",fontFamily:"'Segoe UI',sans-serif",color:"#0c1a4e"}}>
-      <Header titulo="Gerência Geral de Rede Física" sub="Painel de acompanhamento operacional" extra="Março 2026" cor={COR}/>
+      <Header titulo="Gerência Geral de Rede Física" sub="Painel de acompanhamento operacional" cor={COR}/>
       <main style={{padding:"92px 32px 52px"}}>
 
         {/* KPIs */}

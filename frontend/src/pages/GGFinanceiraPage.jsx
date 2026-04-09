@@ -160,7 +160,6 @@ export default function GerenciaFinanceiraPage() {
       <Header
         titulo="Gerência Financeira"
         sub="Orçamento, Repasses, Pagamentos e Contratos"
-        extra="Março 2026"
         cor={COR}
       />
 

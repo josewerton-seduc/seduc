@@ -119,7 +119,6 @@ export default function GGCentroDistribuicaoPage() {
       <Header
         titulo="GG Centro de Distribuição"
         sub="Painel de controle de estoque e entregas"
-        extra="Março 2026"
         cor={COR}
       />
 

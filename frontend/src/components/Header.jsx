@@ -1,6 +1,11 @@
 import { useNavigate, useLocation } from "react-router-dom"
 
-function Header({ titulo, sub, extra, cor = "#2d6a2d" }) {
+function mesAnoAtual() {
+  return new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+    .replace(/^\w/, c => c.toUpperCase())
+}
+
+function Header({ titulo, sub, extra = mesAnoAtual(), cor = "#2d6a2d" }) {
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -17,7 +22,6 @@ function Header({ titulo, sub, extra, cor = "#2d6a2d" }) {
     }
   ]
 
-  // cor mais clarinha pra fundo e borda (ex: azul vira azul bem claro)
   const corClara = cor + "22"
   const corBorda = cor + "55"
 

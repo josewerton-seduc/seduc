@@ -243,7 +243,7 @@ export default function GGOrganizacaoPage(){
 
   return(
     <div style={{minHeight:"100vh",background:"#f4faf6",fontFamily:"'Segoe UI',sans-serif",color:"#1a3a2a"}}>
-      <Header titulo="GG Organização Escolar" sub="Painel de gestão e estrutura da rede" extra="Março 2026" cor={COR}/>
+      <Header titulo="GG Organização Escolar" sub="Painel de gestão e estrutura da rede" cor={COR}/>
 
       <main style={{padding:"92px 32px 52px"}}>
 
