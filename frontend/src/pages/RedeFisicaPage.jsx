@@ -9,24 +9,97 @@ const COR = "#1a3a8f"
 const COR_CLARA = "#f0f4ff"
 const COR_BORDA = "#a0b4f0"
 
-const URL_IDEAL        = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQqcDF_wR7lKG8A39apK5BeEmSQarUis82_Rt-CK7vp0bm6YywKq-v7CsFtS0T4jXO2VMZonEWzuj31/pub?gid=1020668231&single=true&output=csv"
-const URL_TAB8         = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQqcDF_wR7lKG8A39apK5BeEmSQarUis82_Rt-CK7vp0bm6YywKq-v7CsFtS0T4jXO2VMZonEWzuj31/pub?gid=761726944&single=true&output=csv"
+const URL_IDEAL  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQqcDF_wR7lKG8A39apK5BeEmSQarUis82_Rt-CK7vp0bm6YywKq-v7CsFtS0T4jXO2VMZonEWzuj31/pub?gid=1020668231&single=true&output=csv"
+const URL_TAB8   = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQqcDF_wR7lKG8A39apK5BeEmSQarUis82_Rt-CK7vp0bm6YywKq-v7CsFtS0T4jXO2VMZonEWzuj31/pub?gid=761726944&single=true&output=csv"
+const URL_CONSOLIDADO   = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQqcDF_wR7lKG8A39apK5BeEmSQarUis82_Rt-CK7vp0bm6YywKq-v7CsFtS0T4jXO2VMZonEWzuj31/pub?gid=0&single=true&output=csv"
+const URL_NAO_UNITARIOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQqcDF_wR7lKG8A39apK5BeEmSQarUis82_Rt-CK7vp0bm6YywKq-v7CsFtS0T4jXO2VMZonEWzuj31/pub?gid=1004236655&single=true&output=csv"
 
-// Funções extras — total atual confirmado da aba CONSOLIDADO (08/04/2026)
-// Não há quadro ideal definido para estas funções, portanto não é possível calcular faltando/excedente
-const FUNCOES_EXTRAS_DADOS = [
-  { funcao: "Profissional de Apoio",  total: 546 },
-  { funcao: "Monitor de Transp.",     total: 148 },
-  { funcao: "Motorista",              total: 100 },
-  { funcao: "Arte Educador",          total: 84  },
-  { funcao: "Bombeiro Civil",         total: 59  },
-  { funcao: "Op. Carga/Descarga",     total: 58  },
-  { funcao: "Zelador/Manutenção",     total: 57  },
-  { funcao: "Assist. Operacional",    total: 46  },
-  { funcao: "Intérprete de Libras",   total: 30  },
-  { funcao: "Educador Físico",        total: 23  },
-  { funcao: "Nutricionista",          total: 15  },
+// ─────────────────────────────────────────────────────────────────────────────
+// CONSOLIDADO — funções que NÃO são cobertas pelo NÃO-UNITÁRIO.
+// Verificado em 09/04/2026 na aba CONSOLIDADO.
+// Arte Educador e Bombeiro Civil ficam aqui como fallback enquanto o
+// NÃO-UNITÁRIO estiver zerado — quando o gestor preencher lá, usa o de lá.
+// ─────────────────────────────────────────────────────────────────────────────
+const CONSOLIDADO_FIXO = [
+  { funcao: "AUX DE EDUCAÇÃO",       total: 1154, fonte: "Consolidado" },
+  { funcao: "ASG",                   total: 699,  fonte: "Consolidado" },
+  { funcao: "Profissional de Apoio", total: 645,  fonte: "Consolidado" },
+  { funcao: "Porteiro",              total: 633,  fonte: "Consolidado" },
+  { funcao: "Merendeiro(a)",         total: 494,  fonte: "Consolidado" },
+  { funcao: "Coord. de Pátio",       total: 286,  fonte: "Consolidado" },
+  { funcao: "AUX ADM",               total: 198,  fonte: "Consolidado" },
+  { funcao: "Analista ADM",          total: 152,  fonte: "Consolidado" },
+  { funcao: "Lavadeira",             total: 71,   fonte: "Consolidado" },
+  { funcao: "Lactarista",            total: 62,   fonte: "Consolidado" },
+  { funcao: "Zelador/Manutenção",    total: 57,   fonte: "Consolidado" },
+  { funcao: "Assist. Operacional",   total: 46,   fonte: "Consolidado" },
+  { funcao: "Intérprete de Libras",  total: 30,   fonte: "Consolidado" },
+  { funcao: "Educador Físico",       total: 23,   fonte: "Consolidado" },
+  { funcao: "Nutricionista",         total: 15,   fonte: "Consolidado" },
 ]
+// Fallbacks para Arte-Educador (do CONSOLIDADO) e Bombeiro Civil (da aba IDEAL)
+// Usados SOMENTE quando o NÃO-UNITÁRIO estiver zerado/vazio
+const FALLBACK_ARTE_EDUCADOR = 84   // fonte: CONSOLIDADO (09/04/2026)
+const FALLBACK_BOMBEIRO_CIVIL = 52  // fonte: aba IDEAL col 15 (09/04/2026)
+
+const COR_GERENCIA = {
+  "MERENDA":                "#c0521a",
+  "CENTRO DE DISTRIBUIÇÃO": "#b5174f",
+  "REDE FÍSICA":            "#1a3a8f",
+  "TRANSPORTE":             "#0369a1",
+  "ARTES":                  "#7c3371",
+}
+
+function parseNaoUnitarios(records) {
+  return records.slice(1)
+    .filter(r => r[0]?.trim() && r[1]?.trim())
+    .map(r => {
+      const gerencia    = r[0].trim()
+      const cargo       = r[1].trim()
+      const atual       = r[2]?.trim() ? (parseInt(r[2].replace(/[^0-9]/g,""))||0) : null
+      const ideal       = r[3]?.trim() ? (parseInt(r[3].replace(/[^0-9]/g,""))||0) : null
+      const necessidade = r[4]?.trim() ? (parseInt(r[4].replace(/[^0-9-]/g,""))||0) : null
+      return { gerencia, cargo, atual, ideal, necessidade,
+               semDados: atual === null && ideal === null }
+    })
+}
+
+// Monta a lista de funções para o gráfico, aplicando fallbacks quando NÃO-UNITÁRIO estiver vazio
+function montarFuncoesGrafico(naoUnitarios) {
+  // Mapeia cargo → valor atual do NÃO-UNITÁRIO (null = vazio)
+  const nuMap = {}
+  naoUnitarios.forEach(item => {
+    const key = item.cargo.toUpperCase().trim()
+    nuMap[key] = item.atual  // null se vazio
+  })
+
+  // Cargos não-unitários com fallback
+  const cargosNaoUnit = [
+    { funcao: "Motoristas",          total: nuMap["MOTORISTAS"] ?? 0,             fonte: "Não-Unitário" },
+    { funcao: "Monitor de Transp.",  total: nuMap["MONITOR DE TRANSPORTES"] ?? 0, fonte: "Não-Unitário" },
+    { funcao: "Estivador (Merenda)", total: nuMap["ESTIVADOR"] ?? 0,              fonte: "Não-Unitário" },
+    // Arte-Educador: NÃO-UNITÁRIO vazio → fallback CONSOLIDADO
+    {
+      funcao: "Arte Educador",
+      total: (nuMap["ARTE-EDUCADOR(A)"] !== null && nuMap["ARTE-EDUCADOR(A)"] !== undefined)
+             ? nuMap["ARTE-EDUCADOR(A)"]
+             : FALLBACK_ARTE_EDUCADOR,
+      fonte: (nuMap["ARTE-EDUCADOR(A)"] !== null && nuMap["ARTE-EDUCADOR(A)"] !== undefined)
+             ? "Não-Unitário" : "Consolidado*",
+    },
+    // Bombeiro Civil: NÃO-UNITÁRIO vazio → fallback IDEAL
+    {
+      funcao: "Bombeiro Civil",
+      total: (nuMap["BOMBEIROS"] !== null && nuMap["BOMBEIROS"] !== undefined)
+             ? nuMap["BOMBEIROS"]
+             : FALLBACK_BOMBEIRO_CIVIL,
+      fonte: (nuMap["BOMBEIROS"] !== null && nuMap["BOMBEIROS"] !== undefined)
+             ? "Não-Unitário" : "IDEAL*",
+    },
+  ]
+
+  return [...CONSOLIDADO_FIXO, ...cargosNaoUnit].sort((a,b)=>b.total-a.total)
+}
 
 function parseCSV(csv) {
   const records = []
@@ -48,24 +121,33 @@ function parseCSV(csv) {
 
 function toInt(v){return parseInt((v||"").replace(/[^0-9-]/g,""))||0}
 
-const CARGOS = ["ASG","AUX ADM","AUX EDUCAÇÃO","COORD. PÁTIO","LACTARISTA","LAVADEIRA","MERENDEIRO","PORTEIRO","ANALISTA ADM"]
+const CARGOS = ["ASG","AUX ADM","AUX EDUCAÇÃO","COORD. PÁTIO","LACTARISTA","LAVADEIRA","MERENDEIRO","PORTEIRO","ANALISTA ADM","BOMBEIRO CIVIL"]
 
-// Nova estrutura da planilha (atualizada em 09/04/2026):
-// linha 0 = cabeçalho grupo, linha 1 = cabeçalho detalhe, linha 2+ = escolas
+// Estrutura da planilha IDEAL (atualizada 09/04/2026):
+// linha 0 = cabeçalho grupo, linha 1 = cabeçalhos, linha 2+ = escolas
 // col 0=TGS, col 1=TIPO, col 2=ALUNOS, col 3=PORTE, col 4=EJA, col 5=NOME
-// ATUAL: cols 6-14 (9 cargos), col 15=BOMBEIRO CIVIL
-// IDEAL: cols 18-26 (9 cargos)
-// SALDO: cols 30-38 (9 cargos)
-const COL_ATUAL  = 6   // início dos 9 cargos no bloco ATUAL
-const COL_IDEAL  = 18  // início dos 9 cargos no bloco IDEAL
-const COL_SALDO  = 30  // início dos 9 cargos no bloco SALDO
+// ATUAL: cols 6-14 (9 cargos) + col 15 = BOMBEIRO CIVIL
+// IDEAL: cols 18-26 (9 cargos) + col 27 = BOMBEIRO CIVIL
+// SALDO: cols 30-38 (9 cargos) + col 39 = BOMBEIRO CIVIL
+const COL_ATUAL  = 6
+const COL_IDEAL  = 18
+const COL_SALDO  = 30
 
 function processarIdeal(records) {
   const escolas = []
   for(let i=2;i<records.length;i++){
     const r=records[i]
-    const tgs=r[0]?.trim(), tipo=r[1]?.trim(), nome=r[5]?.trim()
-    if(!nome||!tgs||!tgs.match(/^\d+$/))continue
+    const tgsRaw = r[0]?.trim() || ""
+    const tipo   = r[1]?.trim() || ""
+    const nome   = r[5]?.trim() || ""
+
+    // Pula linhas sem nome ou linhas de totais/cabeçalhos
+    if(!nome || nome==="#N/A") continue
+    // TGS: usa o valor se for numérico, senão marca como "?" para não quebrar
+    const tgs = tgsRaw.match(/^\d+$/) ? tgsRaw : "?"
+    // Tipo: se vier #N/A, deixa vazio
+    const tipoLimpo = tipo==="#N/A" ? "" : tipo
+
     const atual  = CARGOS.map((_,j)=>toInt(r[COL_ATUAL+j]))
     const ideal  = CARGOS.map((_,j)=>toInt(r[COL_IDEAL+j]))
     const saldo  = CARGOS.map((_,j)=>toInt(r[COL_SALDO+j]))
@@ -76,7 +158,9 @@ function processarIdeal(records) {
     // Detalhe por cargo
     const detFaltando = CARGOS.map((c,j)=>({cargo:c,val:saldo[j]})).filter(x=>x.val<0)
     const detExcedente= CARGOS.map((c,j)=>({cargo:c,val:saldo[j]})).filter(x=>x.val>0)
-    escolas.push({nome,tgs,tipo,alunos:toInt(r[2]),porte:r[3]?.trim(),salas:toInt(r[4]),
+    const alunos = toInt(r[2])
+    const porte  = (r[3]?.trim()||"") === "#N/A" ? "—" : (r[3]?.trim()||"—")
+    escolas.push({nome, tgs, tipo:tipoLimpo, alunos, porte, salas:toInt(r[4]),
       atual,ideal,saldo,totalAtual,totalIdeal,faltando,excedente,detFaltando,detExcedente})
   }
   const totalEscolas=escolas.length
@@ -213,6 +297,7 @@ const TooltipCustom=({active,payload,label})=>{
 export default function RedeFisicaPage(){
   const [dados,setDados]=useState(null)
   const [funcoes,setFuncoes]=useState(null)
+  const [naoUnitarios,setNaoUnitarios]=useState([])
   const [carregando,setCarregando]=useState(true)
   const [filtroTipos,setFiltroTipos]=useState(new Set(["Todos"]))
   const [filtroTGS,setFiltroTGS]=useState("Todos")
@@ -221,12 +306,16 @@ export default function RedeFisicaPage(){
   const [tgsSelecionada,setTgsSelecionada]=useState(null)
 
   useEffect(()=>{
-    Promise.all([fetch(URL_IDEAL).then(r=>r.text()),fetch(URL_TAB8).then(r=>r.text())])
-      .then(([csvIdeal,csvTab8])=>{
-        setDados(processarIdeal(parseCSV(csvIdeal)))
-        setFuncoes(processarTab8(parseCSV(csvTab8)))
-        setCarregando(false)
-      }).catch(()=>setCarregando(false))
+    Promise.all([
+      fetch(URL_IDEAL).then(r=>r.text()),
+      fetch(URL_TAB8).then(r=>r.text()),
+      fetch(URL_NAO_UNITARIOS).then(r=>r.text()),
+    ]).then(([csvIdeal,csvTab8,csvNaoUnit])=>{
+      setDados(processarIdeal(parseCSV(csvIdeal)))
+      setFuncoes(processarTab8(parseCSV(csvTab8)))
+      setNaoUnitarios(parseNaoUnitarios(parseCSV(csvNaoUnit)))
+      setCarregando(false)
+    }).catch(()=>setCarregando(false))
   },[])
 
   if(carregando)return(
@@ -266,15 +355,17 @@ export default function RedeFisicaPage(){
   const pizzaTipo=Object.entries(porTipo).filter(([t])=>t!=="TIPO").map(([tipo,d])=>({name:tipo,value:d.escolas,fill:COR_TIPO[tipo]||"#94a3b8"}))
   const escolasDaTGS=tgsSelecionada?escolas.filter(e=>e.tgs===tgsSelecionada).sort((a,b)=>b.faltando-a.faltando):[]
 
+  const todasFuncoes = montarFuncoesGrafico(naoUnitarios)
+  const totalGeral   = todasFuncoes.reduce((s,f)=>s+f.total, 0)
+
   const kpis=[
-    {label:"Unidades Escolares Monitoradas",valor:totalEscolas,icon:"🏫",variacao:"EM, CMEI, ETI e CEI"},
-    {label:"Funcionários Ativos",valor:totalAtual.toLocaleString("pt-BR"),icon:"👥",variacao:"quadro de apoio atual"},
-    {label:"Vagas Faltando",valor:totalFaltando,icon:"⚠️",variacao:"abaixo do ideal"},
-    {label:"Vagas Excedentes",valor:totalExcedente,icon:"✅",variacao:"acima do ideal"},
+    {label:"Unidades Escolares Monitoradas", valor:totalEscolas,                        icon:"🏫", variacao:"EM, CMEI, ETI e CEI"},
+    {label:"Funcionários Ativos",            valor:totalGeral.toLocaleString("pt-BR"),  icon:"👥", variacao:"quadro de apoio total"},
+    {label:"Vagas Faltando",                 valor:totalFaltando,                       icon:"⚠️", variacao:"abaixo do ideal"},
+    {label:"Vagas Excedentes",               valor:totalExcedente,                      icon:"✅", variacao:"acima do ideal"},
   ]
 
-  // Altura do gráfico de defasadas: 40px por escola, mínimo 300
-  // Altura total do gráfico interno (38px por escola)
+  // Altura do gráfico de defasadas: 38px por escola
   const alturaDefasadas = Math.max(300, todasDefasadas.length * 38)
   // Altura visível do container scroll — mostra ~8 escolas por vez
   const alturaVisivel = 8 * 38
@@ -300,7 +391,11 @@ export default function RedeFisicaPage(){
 
         {/* ABAS */}
         <div style={{display:"flex",gap:8,marginBottom:20}}>
-          {[{id:"quadro",label:"📊 Quadro de Apoio"},{id:"tgs",label:"🗺️ Por Zona (TGS)"},{id:"outros",label:"🔧 Outros Setores"}].map(a=>(
+          {[
+            {id:"quadro",  label:"📊 Quadro de Apoio"},
+            {id:"tgs",     label:"🗺️ Por Zona (TGS)"},
+            {id:"outros",  label:"🔧 Outros Setores"},
+          ].map(a=>(
             <button key={a.id} onClick={()=>setAbaAtiva(a.id)} style={{
               padding:"8px 20px",borderRadius:10,border:"none",cursor:"pointer",
               fontSize:13,fontWeight:600,
@@ -314,17 +409,19 @@ export default function RedeFisicaPage(){
         {/* ABA: QUADRO DE APOIO */}
         {abaAtiva==="quadro"&&(
           <>
-            <div style={{display:"grid",gridTemplateColumns:"1.3fr 1fr",gap:20,marginBottom:24}}>
-              {/* Defasagem por cargo — tooltip com escolas */}
+            {/* LINHA 1: Defasagem por Função + Cargos por Setor */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:24}}>
+
+              {/* Defasagem por cargo */}
               <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
                 <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Defasagem por Função</div>
                 <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>Vagas faltando vs. excedentes em toda a rede</div>
                 <div style={{fontSize:11,color:COR,marginBottom:12,fontStyle:"italic"}}>💡 Passe o mouse sobre as barras para ver em quais unidades</div>
-                <ResponsiveContainer width="100%" height={260}>
+                <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={defasagemCargo} layout="vertical" barGap={4} barCategoryGap="20%">
                     <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false}/>
                     <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}}/>
-                    <YAxis dataKey="cargo" type="category" tick={{fontSize:10,fill:"#334155"}} width={90}/>
+                    <YAxis dataKey="cargo" type="category" tick={{fontSize:10,fill:"#334155"}} width={95}/>
                     <Tooltip content={(props)=><TooltipDefasagem {...props} defasagemCargo={defasagemCargo}/>}/>
                     <Legend iconType="circle" iconSize={10} wrapperStyle={{fontSize:11}}/>
                     <Bar dataKey="faltando"  name="Faltando"  fill="#ef4444" radius={[0,4,4,0]} animationDuration={800}/>
@@ -333,83 +430,127 @@ export default function RedeFisicaPage(){
                 </ResponsiveContainer>
               </div>
 
-              <div style={{display:"flex",flexDirection:"column",gap:20}}>
-                <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
-                  <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Unidades Escolares por Tipo</div>
-                  <div style={{fontSize:11,color:"#94a3b8",marginBottom:8}}>Distribuição da rede municipal</div>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie data={pizzaTipo} cx="50%" cy="45%" innerRadius={42} outerRadius={68} paddingAngle={3} dataKey="value" animationBegin={0} animationDuration={800}>
-                        {pizzaTipo.map((e,i)=><Cell key={i} fill={e.fill}/>)}
-                      </Pie>
-                      <Tooltip formatter={(v,name)=>[v,name]}/>
-                      <Legend iconType="circle" iconSize={10} wrapperStyle={{fontSize:11}}/>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-
-            {funcoes&&(
-              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
-                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Funcionários Ativos por Função</div>
-                <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Quadro real de servidores de apoio em toda a rede — funções com comparativo ideal/atual</div>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={funcoes} barCategoryGap="25%">
-                    <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
-                    <XAxis dataKey="funcao" tick={{fontSize:10,fill:"#64748b"}}/>
-                    <YAxis tick={{fontSize:10,fill:"#64748b"}}/>
-                    <Tooltip formatter={(v)=>[v.toLocaleString("pt-BR"),"funcionários"]}/>
-                    <Bar dataKey="total" name="Funcionários" radius={[6,6,0,0]} animationDuration={800}>
-                      {funcoes.map((_,i)=><Cell key={i} fill={COR_TGS[i%COR_TGS.length]}/>)}
-                    </Bar>
+              {/* Cargos por Setor — mesmo estilo de gráfico horizontal */}
+              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
+                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Cargos por Setor/Gerência</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>Faltando vs. excedente por cargo não-unitário</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:12,fontStyle:"italic"}}>— = dados não preenchidos pelo gestor</div>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart
+                    data={naoUnitarios.map(c=>({
+                      label: `${c.gerencia.slice(0,14)} / ${c.cargo.slice(0,16)}`,
+                      atual: c.atual ?? 0,
+                      ideal: c.ideal ?? 0,
+                      faltando:  c.necessidade !== null && c.necessidade < 0 ? Math.abs(c.necessidade) : 0,
+                      excedente: c.necessidade !== null && c.necessidade > 0 ? c.necessidade : 0,
+                      semDados:  c.semDados,
+                      cor: COR_GERENCIA[c.gerencia] || "#94a3b8",
+                    }))}
+                    layout="vertical" barGap={4} barCategoryGap="20%"
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false}/>
+                    <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}}/>
+                    <YAxis dataKey="label" type="category" tick={{fontSize:9,fill:"#334155"}} width={165}/>
+                    <Tooltip formatter={(v,name,props)=>{
+                      if(props.payload?.semDados) return ["—","Dados não preenchidos"]
+                      return [v, name]
+                    }}/>
+                    <Legend iconType="circle" iconSize={10} wrapperStyle={{fontSize:11}}/>
+                    <Bar dataKey="faltando"  name="Faltando"  fill="#ef4444" radius={[0,4,4,0]} animationDuration={800}/>
+                    <Bar dataKey="excedente" name="Excedente" fill="#22c55e" radius={[0,4,4,0]} animationDuration={1000}/>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-            )}
-
-            {/* Funções extras — somente total atual, sem comparativo com ideal */}
-            <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
-              <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Outras Funções — Total Atual</div>
-              <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>Funções registradas no CONSOLIDADO — <b>não há quadro ideal definido para estas funções</b>, por isso não é possível calcular faltando/excedente</div>
-              <div style={{background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 14px",marginBottom:16,fontSize:11,color:"#92400e"}}>
-                ℹ️ Estes números mostram apenas quantos servidores existem hoje em cada função, sem comparativo com o ideal.
-              </div>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={FUNCOES_EXTRAS_DADOS} barCategoryGap="25%">
-                  <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
-                  <XAxis dataKey="funcao" tick={{fontSize:9,fill:"#64748b"}} interval={0} angle={-15} textAnchor="end" height={52}/>
-                  <YAxis tick={{fontSize:10,fill:"#64748b"}}/>
-                  <Tooltip formatter={(v)=>[v.toLocaleString("pt-BR"),"servidores"]}/>
-                  <Bar dataKey="total" name="Total atual" radius={[6,6,0,0]} animationDuration={800}>
-                    {FUNCOES_EXTRAS_DADOS.map((_,i)=><Cell key={i} fill={["#94a3b8","#64748b","#475569","#334155","#1e293b","#94a3b8","#64748b","#475569","#334155","#1e293b","#94a3b8"][i]}/>)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
             </div>
 
-            {/* TODAS as unidades defasadas — scroll interno */}
+            {/* GRÁFICO UNIFICADO DE FUNÇÕES */}
             <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
-              <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>
-                🚨 Unidades Escolares com Defasagem ({todasDefasadas.length})
+              <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Funcionários Ativos por Função — Quadro Completo</div>
+              <div style={{fontSize:11,color:"#94a3b8",marginBottom:12}}>
+                Total geral: <b style={{color:COR}}>{totalGeral.toLocaleString("pt-BR")} servidores</b>
               </div>
-              <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Ordenadas por maior déficit — role para ver todas</div>
-              {/* Container com scroll, mostrando ~10 por vez */}
-              {/* Container com scroll vertical — mostra 8 por vez, largura reduzida */}
-              <div style={{display:"flex",justifyContent:"center"}}>
-                <div style={{width:"60%",overflowY:"auto",maxHeight:alturaVisivel,borderRadius:8,border:`1px solid ${COR_CLARA}`}}>
+              <div style={{display:"flex",gap:12,marginBottom:16,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,background:"#eff6ff",borderRadius:8,padding:"6px 12px",fontSize:11,border:`1px solid ${COR_BORDA}`}}>
+                  <span style={{width:10,height:10,borderRadius:2,background:COR,display:"inline-block"}}/>
+                  <span style={{color:COR,fontWeight:600}}>Consolidado</span>
+                  <span style={{color:"#94a3b8"}}>funções por unidade escolar</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6,background:"#f0fdf4",borderRadius:8,padding:"6px 12px",fontSize:11,border:"1px solid #bbf7d0"}}>
+                  <span style={{width:10,height:10,borderRadius:2,background:"#22c55e",display:"inline-block"}}/>
+                  <span style={{color:"#15803d",fontWeight:600}}>Não-Unitário</span>
+                  <span style={{color:"#94a3b8"}}>cargos por setor/gerência</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6,background:"#fffbeb",borderRadius:8,padding:"6px 12px",fontSize:11,border:"1px solid #fcd34d"}}>
+                  <span style={{width:10,height:10,borderRadius:2,background:"#eab308",display:"inline-block"}}/>
+                  <span style={{color:"#92400e",fontWeight:600}}>Fallback*</span>
+                  <span style={{color:"#94a3b8"}}>Não-Unitário vazio → fonte alternativa</span>
+                </div>
+              </div>
+              <div style={{overflowX:"auto"}}>
+                <div style={{minWidth: todasFuncoes.length * 72}}>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={todasFuncoes} barCategoryGap="22%">
+                      <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
+                      <XAxis dataKey="funcao" tick={{fontSize:9,fill:"#64748b"}} interval={0} angle={-20} textAnchor="end" height={58}/>
+                      <YAxis tick={{fontSize:10,fill:"#64748b"}}/>
+                      <Tooltip formatter={(v)=>[v.toLocaleString("pt-BR"),"servidores"]}
+                        labelFormatter={(l,p)=>`${l}${p?.[0]?.payload?.fonte?` · fonte: ${p[0].payload.fonte}`:""}`}/>
+                      <Bar dataKey="total" name="Servidores" radius={[6,6,0,0]} animationDuration={800}>
+                        {todasFuncoes.map((f,i)=>{
+                          const cor = f.fonte==="Não-Unitário" ? "#22c55e"
+                                    : f.fonte?.includes("*")   ? "#eab308"
+                                    : COR_TGS[i%COR_TGS.length]
+                          return <Cell key={i} fill={cor}/>
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div style={{marginTop:12,background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 14px",fontSize:11,color:"#92400e"}}>
+                ⚠️ Barras <b style={{color:"#eab308"}}>amarelas</b> usam fonte alternativa porque o gestor ainda não preencheu a planilha de Cargos Não-Unitários. Quando preencher, o valor atualiza automaticamente.
+              </div>
+            </div>
+
+            {/* LINHA 3: Defasadas (scroll) + Pizza por tipo */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:24}}>
+
+              {/* Unidades defasadas com scroll */}
+              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
+                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>
+                  🚨 Unidades com Defasagem ({todasDefasadas.length})
+                </div>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Ordenadas por maior déficit — role para ver todas</div>
+                <div style={{overflowY:"auto",maxHeight:alturaVisivel,borderRadius:8,border:`1px solid ${COR_CLARA}`}}>
                   <ResponsiveContainer width="100%" height={alturaDefasadas}>
                     <BarChart
-                      data={todasDefasadas.map(e=>({nome:e.nome.length>32?e.nome.slice(0,32)+"…":e.nome,faltando:e.faltando,tipo:e.tipo}))}
+                      data={todasDefasadas.map(e=>({nome:e.nome.length>28?e.nome.slice(0,28)+"…":e.nome,faltando:e.faltando}))}
                       layout="vertical" barCategoryGap="15%"
-                      margin={{top:8,right:20,left:8,bottom:8}}
+                      margin={{top:8,right:16,left:8,bottom:8}}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false}/>
                       <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}}/>
-                      <YAxis dataKey="nome" type="category" tick={{fontSize:9,fill:"#334155"}} width={210}/>
+                      <YAxis dataKey="nome" type="category" tick={{fontSize:9,fill:"#334155"}} width={190}/>
                       <Tooltip formatter={(v)=>[`-${v} vagas`,"defasagem"]}/>
-                      <Bar dataKey="faltando" name="Vagas faltando" fill="#ef4444" radius={[0,6,6,0]} animationDuration={800}/>
+                      <Bar dataKey="faltando" name="Vagas faltando" fill="#ef4444" radius={[0,5,5,0]} animationDuration={800}/>
                     </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Pizza por tipo */}
+              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,display:"flex",flexDirection:"column"}}>
+                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Unidades Escolares por Tipo</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:8}}>Distribuição da rede municipal</div>
+                <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={pizzaTipo} cx="50%" cy="45%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value" animationBegin={0} animationDuration={800}>
+                        {pizzaTipo.map((e,i)=><Cell key={i} fill={e.fill}/>)}
+                      </Pie>
+                      <Tooltip formatter={(v,name)=>[v,name]}/>
+                      <Legend iconType="circle" iconSize={10} wrapperStyle={{fontSize:12}}/>
+                    </PieChart>
                   </ResponsiveContainer>
                 </div>
               </div>
