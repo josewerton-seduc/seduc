@@ -9,15 +9,11 @@ const COR = "#1a3a8f"
 const COR_CLARA = "#f0f4ff"
 const COR_BORDA = "#a0b4f0"
 
-const URL_IDEAL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlwqeOhW2S1rNxrMydAaaHDcde-3jE_akLf7hg2Z3K0wK4UvDcfBlTwiBMnqYG6BI_2PRInY-Xv0XJ/pub?gid=1850294324&single=true&output=csv"
-const URL_TAB8  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSlwqeOhW2S1rNxrMydAaaHDcde-3jE_akLf7hg2Z3K0wK4UvDcfBlTwiBMnqYG6BI_2PRInY-Xv0XJ/pub?gid=761726944&single=true&output=csv"
+const URL_IDEAL        = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQqcDF_wR7lKG8A39apK5BeEmSQarUis82_Rt-CK7vp0bm6YywKq-v7CsFtS0T4jXO2VMZonEWzuj31/pub?gid=1020668231&single=true&output=csv"
+const URL_TAB8         = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQqcDF_wR7lKG8A39apK5BeEmSQarUis82_Rt-CK7vp0bm6YywKq-v7CsFtS0T4jXO2VMZonEWzuj31/pub?gid=761726944&single=true&output=csv"
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FUNÇÕES EXTRAS — lidas da aba CONSOLIDADO.
-// São valores fixos porque essa aba não está publicada como CSV ainda.
-// NÃO fazem parte da URL_TAB8 nem da URL_IDEAL.
-// Precisam ser atualizadas manualmente aqui até a planilha ser publicada.
-// ─────────────────────────────────────────────────────────────────────────────
+// Funções extras — total atual confirmado da aba CONSOLIDADO (08/04/2026)
+// Não há quadro ideal definido para estas funções, portanto não é possível calcular faltando/excedente
 const FUNCOES_EXTRAS_DADOS = [
   { funcao: "Profissional de Apoio",  total: 546 },
   { funcao: "Monitor de Transp.",     total: 148 },
@@ -31,13 +27,6 @@ const FUNCOES_EXTRAS_DADOS = [
   { funcao: "Educador Físico",        total: 23  },
   { funcao: "Nutricionista",          total: 15  },
 ]
-const TOTAL_EXTRAS = FUNCOES_EXTRAS_DADOS.reduce((s, f) => s + f.total, 0)
-
-// Mês/ano atual automático em português
-function mesAnoAtual() {
-  return new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
-    .replace(/^\w/, c => c.toUpperCase())
-}
 
 function parseCSV(csv) {
   const records = []
@@ -61,19 +50,30 @@ function toInt(v){return parseInt((v||"").replace(/[^0-9-]/g,""))||0}
 
 const CARGOS = ["ASG","AUX ADM","AUX EDUCAÇÃO","COORD. PÁTIO","LACTARISTA","LAVADEIRA","MERENDEIRO","PORTEIRO","ANALISTA ADM"]
 
+// Nova estrutura da planilha (atualizada em 09/04/2026):
+// linha 0 = cabeçalho grupo, linha 1 = cabeçalho detalhe, linha 2+ = escolas
+// col 0=TGS, col 1=TIPO, col 2=ALUNOS, col 3=PORTE, col 4=EJA, col 5=NOME
+// ATUAL: cols 6-14 (9 cargos), col 15=BOMBEIRO CIVIL
+// IDEAL: cols 18-26 (9 cargos)
+// SALDO: cols 30-38 (9 cargos)
+const COL_ATUAL  = 6   // início dos 9 cargos no bloco ATUAL
+const COL_IDEAL  = 18  // início dos 9 cargos no bloco IDEAL
+const COL_SALDO  = 30  // início dos 9 cargos no bloco SALDO
+
 function processarIdeal(records) {
   const escolas = []
   for(let i=2;i<records.length;i++){
     const r=records[i]
-    const tgs=r[0]?.trim(), tipo=r[1]?.trim(), nome=r[6]?.trim()
+    const tgs=r[0]?.trim(), tipo=r[1]?.trim(), nome=r[5]?.trim()
     if(!nome||!tgs||!tgs.match(/^\d+$/))continue
-    const atual  = CARGOS.map((_,j)=>toInt(r[7+j]))
-    const ideal  = CARGOS.map((_,j)=>toInt(r[16+j]))
-    const saldo  = CARGOS.map((_,j)=>toInt(r[25+j]))
+    const atual  = CARGOS.map((_,j)=>toInt(r[COL_ATUAL+j]))
+    const ideal  = CARGOS.map((_,j)=>toInt(r[COL_IDEAL+j]))
+    const saldo  = CARGOS.map((_,j)=>toInt(r[COL_SALDO+j]))
     const totalAtual  = atual.reduce((s,v)=>s+v,0)
     const totalIdeal  = ideal.reduce((s,v)=>s+v,0)
     const faltando    = saldo.reduce((s,v)=>s+(v<0?Math.abs(v):0),0)
     const excedente   = saldo.reduce((s,v)=>s+(v>0?v:0),0)
+    // Detalhe por cargo
     const detFaltando = CARGOS.map((c,j)=>({cargo:c,val:saldo[j]})).filter(x=>x.val<0)
     const detExcedente= CARGOS.map((c,j)=>({cargo:c,val:saldo[j]})).filter(x=>x.val>0)
     escolas.push({nome,tgs,tipo,alunos:toInt(r[2]),porte:r[3]?.trim(),salas:toInt(r[4]),
@@ -86,6 +86,7 @@ function processarIdeal(records) {
   const defasagemCargo=CARGOS.map((cargo,j)=>{
     const falt=escolas.reduce((s,e)=>s+(e.saldo[j]<0?Math.abs(e.saldo[j]):0),0)
     const exc =escolas.reduce((s,e)=>s+(e.saldo[j]>0?e.saldo[j]:0),0)
+    // Escolas com falta/excedente nesse cargo
     const escolasFalt=escolas.filter(e=>e.saldo[j]<0).sort((a,b)=>a.saldo[j]-b.saldo[j]).slice(0,5)
     const escolasExc =escolas.filter(e=>e.saldo[j]>0).sort((a,b)=>b.saldo[j]-a.saldo[j]).slice(0,5)
     return{cargo,faltando:falt,excedente:exc,escolasFalt,escolasExc}
@@ -102,29 +103,18 @@ function processarIdeal(records) {
     if(!porTipo[e.tipo])porTipo[e.tipo]={tipo:e.tipo,escolas:0,faltando:0,excedente:0}
     porTipo[e.tipo].escolas++;porTipo[e.tipo].faltando+=e.faltando;porTipo[e.tipo].excedente+=e.excedente
   })
+  // TODAS as escolas defasadas (não só top 10)
   const todasDefasadas=[...escolas].filter(e=>e.faltando>0).sort((a,b)=>b.faltando-a.faltando)
   return{escolas,totalEscolas,totalFaltando,totalExcedente,totalAtual,defasagemCargo,dadosTGS,porTipo,todasDefasadas}
 }
 
-// Retorna os 8 cargos lidos da Tab8 com seus totais reais
 function processarTab8(records){
   const dados=records.slice(2).filter(r=>r[0]&&r[0].trim())
-  const totalPorFuncao={
-    "ASG":0,"AUX ADM":0,"AUX DE EDUCAÇÃO":0,"COORDENADOR DE PÁTIO":0,
-    "LACTARISTA":0,"LAVADEIRA":0,"MERENDEIRA(O)":0,"PORTEIRO":0
-  }
+  const totalPorFuncao={"ASG":0,"AUX ADM":0,"AUX DE EDUCAÇÃO":0,"COORDENADOR DE PÁTIO":0,"LACTARISTA":0,"LAVADEIRA":0,"MERENDEIRA(O)":0,"PORTEIRO":0}
   dados.forEach(r=>{Object.keys(totalPorFuncao).forEach((k,i)=>{totalPorFuncao[k]+=toInt(r[1+i])})})
   return Object.entries(totalPorFuncao)
-    .map(([funcao,total])=>({
-      funcao: funcao
-        .replace("MERENDEIRA(O)","MERENDEIRO")
-        .replace("AUX DE EDUCAÇÃO","AUX EDUCAÇÃO")
-        .replace("COORDENADOR DE PÁTIO","COORD. PÁTIO"),
-      total,
-      fonte:"Tab8"
-    }))
-    .filter(d=>d.total>0)
-    .sort((a,b)=>b.total-a.total)
+    .map(([funcao,total])=>({funcao:funcao.replace("MERENDEIRA(O)","MERENDEIRO").replace("AUX DE EDUCAÇÃO","AUX EDUCAÇÃO").replace("COORDENADOR DE PÁTIO","COORD. PÁTIO"),total}))
+    .filter(d=>d.total>0).sort((a,b)=>b.total-a.total)
 }
 
 const timelineFicticia=[
@@ -139,6 +129,7 @@ const statusStyle={"Concluído":{bg:"#dcfce7",cor:"#15803d"},"Em andamento":{bg:
 const COR_TIPO={"EM":"#1d7fc4","CMEI":"#2d6a4f","ETI":"#7c3371","CEI":"#c0521a"}
 const COR_TGS=["#1a3a8f","#2563eb","#3b82f6","#60a5fa","#93c5fd","#0369a1","#0284c7","#0ea5e9","#38bdf8"]
 
+// Tooltip personalizado para gráfico de defasagem por cargo
 function TooltipDefasagem({active,payload,label,defasagemCargo}){
   if(!active||!payload?.length)return null
   const item=defasagemCargo.find(d=>d.cargo===label)
@@ -170,10 +161,12 @@ function TooltipDefasagem({active,payload,label,defasagemCargo}){
   )
 }
 
+// Tooltip para tabela de escolas — mostra cargos faltando/excedendo
 function TooltipEscola({escola,tipo}){
   const itens = tipo==="faltando" ? escola.detFaltando : escola.detExcedente
   if(!itens||itens.length===0)return null
   const cor = tipo==="faltando" ? "#b91c1c" : "#15803d"
+  const bg  = tipo==="faltando" ? "#fef2f2" : "#f0fdf4"
   return(
     <div style={{position:"absolute",zIndex:999,background:"#fff",border:`1.5px solid ${cor}`,borderRadius:10,padding:"10px 14px",fontSize:11,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",minWidth:200,whiteSpace:"nowrap",top:-4,left:"110%"}}>
       <div style={{fontWeight:700,color:cor,marginBottom:6}}>
@@ -189,6 +182,7 @@ function TooltipEscola({escola,tipo}){
   )
 }
 
+// Célula da tabela com hover tooltip
 function CelulaComTooltip({escola,tipo,valor}){
   const [hover,setHover]=useState(false)
   const cor=tipo==="faltando"?"#b91c1c":"#15803d"
@@ -251,25 +245,6 @@ export default function RedeFisicaPage(){
 
   const{totalEscolas,totalFaltando,totalExcedente,totalAtual,defasagemCargo,dadosTGS,porTipo,todasDefasadas,escolas}=dados
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // CÁLCULO DO KPI FUNCIONÁRIOS ATIVOS
-  //
-  // totalTab8  → soma real dos 8 cargos lidos da Tab8 (planilha publicada)
-  // TOTAL_EXTRAS → soma das 11 funções extras fixas do CONSOLIDADO
-  // totalConsolidado → soma final exibida no KPI (Tab8 + extras)
-  //
-  // O totalAtual (da planilha IDEAL, soma por escola) cobre os mesmos 9 cargos
-  // da Tab8 mas pode divergir porque são abas diferentes da mesma planilha.
-  // Por isso o KPI usa Tab8 + extras, que refletem o CONSOLIDADO.
-  // ─────────────────────────────────────────────────────────────────────────────
-  const totalTab8 = funcoes ? funcoes.reduce((s,f)=>s+f.total,0) : 0
-  const totalConsolidado = totalTab8 + TOTAL_EXTRAS
-
-  // Gráfico unificado: Tab8 (azul) + extras do CONSOLIDADO (cinza), do maior para o menor
-  const todasFuncoes = funcoes
-    ? [...funcoes, ...FUNCOES_EXTRAS_DADOS.map(f=>({...f,fonte:"Consolidado"}))].sort((a,b)=>b.total-a.total)
-    : FUNCOES_EXTRAS_DADOS.map(f=>({...f,fonte:"Consolidado"}))
-
   const toggleTipo=(tipo)=>{
     if(tipo==="Todos"){setFiltroTipos(new Set(["Todos"]));return}
     setFiltroTipos(prev=>{
@@ -293,25 +268,20 @@ export default function RedeFisicaPage(){
 
   const kpis=[
     {label:"Unidades Escolares Monitoradas",valor:totalEscolas,icon:"🏫",variacao:"EM, CMEI, ETI e CEI"},
-    {
-      label:"Funcionários Ativos",
-      valor:totalConsolidado.toLocaleString("pt-BR"),
-      icon:"👥",
-      variacao:`Tab8: ${totalTab8.toLocaleString("pt-BR")} · Consolidado: ${TOTAL_EXTRAS}`,
-    },
+    {label:"Funcionários Ativos",valor:totalAtual.toLocaleString("pt-BR"),icon:"👥",variacao:"quadro de apoio atual"},
     {label:"Vagas Faltando",valor:totalFaltando,icon:"⚠️",variacao:"abaixo do ideal"},
     {label:"Vagas Excedentes",valor:totalExcedente,icon:"✅",variacao:"acima do ideal"},
   ]
 
+  // Altura do gráfico de defasadas: 40px por escola, mínimo 300
+  // Altura total do gráfico interno (38px por escola)
   const alturaDefasadas = Math.max(300, todasDefasadas.length * 38)
+  // Altura visível do container scroll — mostra ~8 escolas por vez
   const alturaVisivel = 8 * 38
 
   return(
     <div style={{minHeight:"100vh",background:"#f0f4ff",fontFamily:"'Segoe UI',sans-serif",color:"#0c1a4e"}}>
-
-      {/* extra recebe mês/ano atual calculado automaticamente */}
-      <Header titulo="Gerência Geral de Rede Física" sub="Painel de acompanhamento operacional" extra={mesAnoAtual()} cor={COR}/>
-
+      <Header titulo="Gerência Geral de Rede Física" sub="Painel de acompanhamento operacional" extra="Março 2026" cor={COR}/>
       <main style={{padding:"92px 32px 52px"}}>
 
         {/* KPIs */}
@@ -345,6 +315,7 @@ export default function RedeFisicaPage(){
         {abaAtiva==="quadro"&&(
           <>
             <div style={{display:"grid",gridTemplateColumns:"1.3fr 1fr",gap:20,marginBottom:24}}>
+              {/* Defasagem por cargo — tooltip com escolas */}
               <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
                 <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Defasagem por Função</div>
                 <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>Vagas faltando vs. excedentes em toda a rede</div>
@@ -379,75 +350,57 @@ export default function RedeFisicaPage(){
               </div>
             </div>
 
-            {/* ── GRÁFICO UNIFICADO — TODAS AS FUNÇÕES ── */}
+            {funcoes&&(
+              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
+                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Funcionários Ativos por Função</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Quadro real de servidores de apoio em toda a rede — funções com comparativo ideal/atual</div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={funcoes} barCategoryGap="25%">
+                    <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
+                    <XAxis dataKey="funcao" tick={{fontSize:10,fill:"#64748b"}}/>
+                    <YAxis tick={{fontSize:10,fill:"#64748b"}}/>
+                    <Tooltip formatter={(v)=>[v.toLocaleString("pt-BR"),"funcionários"]}/>
+                    <Bar dataKey="total" name="Funcionários" radius={[6,6,0,0]} animationDuration={800}>
+                      {funcoes.map((_,i)=><Cell key={i} fill={COR_TGS[i%COR_TGS.length]}/>)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Funções extras — somente total atual, sem comparativo com ideal */}
             <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
-              <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>
-                Funcionários Ativos por Função — Todas as Funções
+              <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Outras Funções — Total Atual</div>
+              <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>Funções registradas no CONSOLIDADO — <b>não há quadro ideal definido para estas funções</b>, por isso não é possível calcular faltando/excedente</div>
+              <div style={{background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"8px 14px",marginBottom:16,fontSize:11,color:"#92400e"}}>
+                ℹ️ Estes números mostram apenas quantos servidores existem hoje em cada função, sem comparativo com o ideal.
               </div>
-              <div style={{fontSize:11,color:"#94a3b8",marginBottom:12}}>
-                Quadro completo · total: <b style={{color:COR}}>{totalConsolidado.toLocaleString("pt-BR")} servidores</b>
-              </div>
-
-              {/* Legenda de fontes */}
-              <div style={{display:"flex",gap:12,marginBottom:16,flexWrap:"wrap"}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,background:"#eff6ff",borderRadius:8,padding:"6px 12px",fontSize:11,border:`1px solid ${COR_BORDA}`}}>
-                  <span style={{width:10,height:10,borderRadius:2,background:COR,display:"inline-block",flexShrink:0}}/>
-                  <span style={{color:COR,fontWeight:600}}>Tab8</span>
-                  <span style={{color:"#94a3b8"}}>— {totalTab8.toLocaleString("pt-BR")} servidores (8 funções, planilha publicada)</span>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:6,background:"#f8fafc",borderRadius:8,padding:"6px 12px",fontSize:11,border:"1px solid #e2e8f0"}}>
-                  <span style={{width:10,height:10,borderRadius:2,background:"#94a3b8",display:"inline-block",flexShrink:0}}/>
-                  <span style={{color:"#475569",fontWeight:600}}>CONSOLIDADO</span>
-                  <span style={{color:"#94a3b8"}}>— {TOTAL_EXTRAS.toLocaleString("pt-BR")} servidores (11 funções, valores fixos)</span>
-                </div>
-              </div>
-
-              {/* Scroll horizontal para caber todas as funções */}
-              <div style={{overflowX:"auto"}}>
-                <div style={{minWidth: todasFuncoes.length * 76}}>
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={todasFuncoes} barCategoryGap="22%">
-                      <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
-                      <XAxis dataKey="funcao" tick={{fontSize:9,fill:"#64748b"}} interval={0} angle={-20} textAnchor="end" height={58}/>
-                      <YAxis tick={{fontSize:10,fill:"#64748b"}}/>
-                      <Tooltip
-                        formatter={(v)=>[v.toLocaleString("pt-BR"),"servidores"]}
-                        labelFormatter={(label,payload)=>{
-                          const fonte=payload?.[0]?.payload?.fonte
-                          return `${label}${fonte?` · fonte: ${fonte}`:""}`
-                        }}
-                      />
-                      <Bar dataKey="total" name="Servidores" radius={[6,6,0,0]} animationDuration={800}>
-                        {todasFuncoes.map((f,i)=>(
-                          <Cell key={i} fill={f.fonte==="Tab8" ? COR_TGS[i % COR_TGS.length] : "#94a3b8"}/>
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Aviso de transparência */}
-              <div style={{marginTop:14,background:"#fffbeb",border:"1px solid #fcd34d",borderRadius:8,padding:"10px 14px",fontSize:11,color:"#92400e",lineHeight:1.6}}>
-                ⚠️ <b>Como este total é calculado:</b> KPI = Tab8 ({totalTab8.toLocaleString("pt-BR")}) + CONSOLIDADO ({TOTAL_EXTRAS}) = <b>{totalConsolidado.toLocaleString("pt-BR")}</b>.
-                As barras <b style={{color:COR}}>azuis</b> vêm da planilha Tab8 publicada. As barras <b style={{color:"#64748b"}}>cinzas</b> são valores fixos do CONSOLIDADO e precisam ser atualizados manualmente neste arquivo enquanto essa aba não for publicada como CSV.
-                {totalAtual !== totalTab8 && (
-                  <span> Nota: a soma da coluna ATUAL na tabela por escola ({totalAtual.toLocaleString("pt-BR")}) diverge da Tab8 ({totalTab8.toLocaleString("pt-BR")}) — verifique se as duas abas da planilha estão sincronizadas.</span>
-                )}
-              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={FUNCOES_EXTRAS_DADOS} barCategoryGap="25%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
+                  <XAxis dataKey="funcao" tick={{fontSize:9,fill:"#64748b"}} interval={0} angle={-15} textAnchor="end" height={52}/>
+                  <YAxis tick={{fontSize:10,fill:"#64748b"}}/>
+                  <Tooltip formatter={(v)=>[v.toLocaleString("pt-BR"),"servidores"]}/>
+                  <Bar dataKey="total" name="Total atual" radius={[6,6,0,0]} animationDuration={800}>
+                    {FUNCOES_EXTRAS_DADOS.map((_,i)=><Cell key={i} fill={["#94a3b8","#64748b","#475569","#334155","#1e293b","#94a3b8","#64748b","#475569","#334155","#1e293b","#94a3b8"][i]}/>)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
 
-            {/* UNIDADES DEFASADAS */}
+            {/* TODAS as unidades defasadas — scroll interno */}
             <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
               <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>
                 🚨 Unidades Escolares com Defasagem ({todasDefasadas.length})
               </div>
               <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Ordenadas por maior déficit — role para ver todas</div>
+              {/* Container com scroll, mostrando ~10 por vez */}
+              {/* Container com scroll vertical — mostra 8 por vez, largura reduzida */}
               <div style={{display:"flex",justifyContent:"center"}}>
                 <div style={{width:"60%",overflowY:"auto",maxHeight:alturaVisivel,borderRadius:8,border:`1px solid ${COR_CLARA}`}}>
                   <ResponsiveContainer width="100%" height={alturaDefasadas}>
                     <BarChart
-                      data={todasDefasadas.map(e=>({nome:e.nome.length>32?e.nome.slice(0,32)+"…":e.nome,faltando:e.faltando}))}
+                      data={todasDefasadas.map(e=>({nome:e.nome.length>32?e.nome.slice(0,32)+"…":e.nome,faltando:e.faltando,tipo:e.tipo}))}
                       layout="vertical" barCategoryGap="15%"
                       margin={{top:8,right:20,left:8,bottom:8}}
                     >
@@ -462,7 +415,7 @@ export default function RedeFisicaPage(){
               </div>
             </div>
 
-            {/* TABELA DETALHADA */}
+            {/* Tabela com tooltip nos valores */}
             <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:12}}>
                 <div>
@@ -504,7 +457,8 @@ export default function RedeFisicaPage(){
               )}
 
               <div style={{fontSize:11,color:"#64748b",marginBottom:12}}>
-                Exibindo <b>{escolasFiltradas.length}</b> de {totalEscolas} unidades
+                Exibindo <b>{escolasFiltradas.length}</b> de {escolasFiltradas.length} unidades
+                
               </div>
 
               <div style={{overflowX:"auto"}}>
@@ -530,8 +484,12 @@ export default function RedeFisicaPage(){
                         <td style={{padding:"9px 10px",fontSize:11,color:"#64748b"}}>{e.porte}</td>
                         <td style={{padding:"9px 10px",fontSize:13,fontWeight:700,color:COR,textAlign:"center"}}>{e.totalAtual}</td>
                         <td style={{padding:"9px 10px",fontSize:13,fontWeight:700,color:"#475569",textAlign:"center"}}>{e.totalIdeal}</td>
-                        <td style={{padding:"9px 10px",textAlign:"center"}}><CelulaComTooltip escola={e} tipo="faltando" valor={e.faltando}/></td>
-                        <td style={{padding:"9px 10px",textAlign:"center"}}><CelulaComTooltip escola={e} tipo="excedente" valor={e.excedente}/></td>
+                        <td style={{padding:"9px 10px",textAlign:"center"}}>
+                          <CelulaComTooltip escola={e} tipo="faltando" valor={e.faltando}/>
+                        </td>
+                        <td style={{padding:"9px 10px",textAlign:"center"}}>
+                          <CelulaComTooltip escola={e} tipo="excedente" valor={e.excedente}/>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -690,13 +648,9 @@ export default function RedeFisicaPage(){
           <div style={{fontWeight:700,fontSize:13,color:"#475569",marginBottom:12}}>📖 Como ler este painel</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,fontSize:12,color:"#64748b",lineHeight:1.7}}>
             <div><div style={{fontWeight:600,color:"#334155",marginBottom:4}}>🔴 Faltando (vermelho)</div>Unidades com <b>menos funcionários do que o ideal</b>. Passe o mouse no número para ver quais cargos estão faltando.</div>
-            <div><div style={{fontWeight:600,color:"#334155",marginBottom:4}}>🟢 Excedente (verde)</div>Unidades com <b>mais funcionários do que o ideal</b>. Pode indicar que o ideal não foi atualizado ou houve remanejamento.</div>
-            <div>
-              <div style={{fontWeight:600,color:"#334155",marginBottom:4}}>👥 Total de Funcionários Ativos</div>
-              KPI = <b>Tab8</b> (8 funções com quadro ideal, planilha publicada) + <b>CONSOLIDADO</b> (11 funções extras, valores fixos no código).
-              A coluna ATUAL da tabela por unidade escolar vem da planilha IDEAL e cobre apenas os 9 cargos com quadro definido.
-            </div>
-            <div><div style={{fontWeight:600,color:"#334155",marginBottom:4}}>🗺️ O que é TGS?</div>TGS (Território de Gestão Setorial) é a divisão geográfica da cidade em 9 zonas escolares. Clique nos gráficos ou cards para ver as unidades de cada zona.</div>
+            <div><div style={{fontWeight:600,color:"#334155",marginBottom:4}}>🟢 Excedente (verde)</div>Unidades com <b>mais funcionários do que o ideal</b>. Pode indicar que o ideal não foi atualizado na planilha ou houve remanejamento.</div>
+            <div><div style={{fontWeight:600,color:"#334155",marginBottom:4}}>⚠️ Sobre os dados</div>Valores lidos diretamente do Google Sheets. Unidades com Ideal = 0 podem indicar que o quadro ideal ainda não foi preenchido para aquela unidade.</div>
+            <div><div style={{fontWeight:600,color:"#334155",marginBottom:4}}>🗺️ O que é TGS?</div>TGS (Território de Gestão Setorial) é a divisão geográfica da cidade em 9 zonas escolares.</div>
           </div>
         </div>
 
