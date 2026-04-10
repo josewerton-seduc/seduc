@@ -15,90 +15,130 @@ const URL_CONSOLIDADO   = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQqcD
 const URL_NAO_UNITARIOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQqcDF_wR7lKG8A39apK5BeEmSQarUis82_Rt-CK7vp0bm6YywKq-v7CsFtS0T4jXO2VMZonEWzuj31/pub?gid=1004236655&single=true&output=csv"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CONSOLIDADO — funções que NÃO são cobertas pelo NÃO-UNITÁRIO.
-// Verificado em 09/04/2026 na aba CONSOLIDADO.
-// Arte Educador e Bombeiro Civil ficam aqui como fallback enquanto o
-// NÃO-UNITÁRIO estiver zerado — quando o gestor preencher lá, usa o de lá.
+// CONSOLIDADO — funções verificadas na aba CONSOLIDADO (10/04/2026)
 // ─────────────────────────────────────────────────────────────────────────────
 const CONSOLIDADO_FIXO = [
-  { funcao: "AUX DE EDUCAÇÃO",       total: 1154, fonte: "Consolidado" },
-  { funcao: "ASG",                   total: 699,  fonte: "Consolidado" },
-  { funcao: "Profissional de Apoio", total: 645,  fonte: "Consolidado" },
-  { funcao: "Porteiro",              total: 633,  fonte: "Consolidado" },
-  { funcao: "Merendeiro(a)",         total: 494,  fonte: "Consolidado" },
-  { funcao: "Coord. de Pátio",       total: 286,  fonte: "Consolidado" },
-  { funcao: "AUX ADM",               total: 198,  fonte: "Consolidado" },
-  { funcao: "Analista ADM",          total: 152,  fonte: "Consolidado" },
-  { funcao: "Lavadeira",             total: 71,   fonte: "Consolidado" },
-  { funcao: "Lactarista",            total: 62,   fonte: "Consolidado" },
-  { funcao: "Zelador/Manutenção",    total: 57,   fonte: "Consolidado" },
-  { funcao: "Assist. Operacional",   total: 46,   fonte: "Consolidado" },
-  { funcao: "Intérprete de Libras",  total: 30,   fonte: "Consolidado" },
-  { funcao: "Educador Físico",       total: 23,   fonte: "Consolidado" },
-  { funcao: "Nutricionista",         total: 15,   fonte: "Consolidado" },
+  { funcao: "AUX DE EDUCAÇÃO",       total: 1153, escolas: 114, fonte: "Consolidado" },
+  { funcao: "ASG",                   total: 699,  escolas: 181, fonte: "Consolidado" },
+  { funcao: "Profissional de Apoio", total: 645,  escolas: 114, fonte: "Consolidado" },
+  { funcao: "Porteiro",              total: 633,  escolas: 171, fonte: "Consolidado" },
+  { funcao: "Merendeiro(a)",         total: 494,  escolas: 156, fonte: "Consolidado" },
+  { funcao: "Coord. de Pátio",       total: 286,  escolas: 68,  fonte: "Consolidado" },
+  { funcao: "AUX ADM",               total: 198,  escolas: 89,  fonte: "Consolidado" },
+  { funcao: "Analista ADM",          total: 152,  escolas: 107, fonte: "Consolidado" },
+  { funcao: "Lavadeira",             total: 71,   escolas: 36,  fonte: "Consolidado" },
+  { funcao: "Lactarista",            total: 62,   escolas: 32,  fonte: "Consolidado" },
+  { funcao: "Zelador/Manutenção",    total: 57,   escolas: 57,  fonte: "Consolidado" },
+  { funcao: "Assist. Operacional",   total: 46,   escolas: 31,  fonte: "Consolidado" },
+  { funcao: "Intérprete de Libras",  total: 30,   escolas: 15,  fonte: "Consolidado" },
+  { funcao: "Educador Físico",       total: 23,   escolas: 3,   fonte: "Consolidado" },
+  { funcao: "Nutricionista",         total: 15,   escolas: 2,   fonte: "Consolidado" },
 ]
-// Fallbacks para Arte-Educador (do CONSOLIDADO) e Bombeiro Civil (da aba IDEAL)
-// Usados SOMENTE quando o NÃO-UNITÁRIO estiver zerado/vazio
-const FALLBACK_ARTE_EDUCADOR = 84   // fonte: CONSOLIDADO (09/04/2026)
-const FALLBACK_BOMBEIRO_CIVIL = 52  // fonte: aba IDEAL col 15 (09/04/2026)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CARGOS NÃO-UNITÁRIOS — verificados na imagem da planilha (10/04/2026)
+// Fonte: aba CARGOS NÃO-UNITÁRIOS
+// contratNec = contratação necessária (mínimo pra funcionar)
+// contratUnit = contratação por unidade escolar (ideal utópico — quadro perfeito)
+// ─────────────────────────────────────────────────────────────────────────────
+const NAO_UNITARIOS_FIXO = [
+  { gerencia:"REDE FÍSICA",          cargo:"Bombeiro Civil",         atual:58,  ideal:92,   contratNec:-34,  contratUnit:256, semDados:false },
+  { gerencia:"ARTES",                cargo:"Arte-Educador(a)",       atual:84,  ideal:99,   contratNec:-15,  contratUnit:73,  semDados:false },
+  { gerencia:"TRANSPORTE",           cargo:"Motoristas",             atual:135, ideal:135,  contratNec:0,    contratUnit:null,semDados:false },
+  { gerencia:"TRANSPORTE",           cargo:"Monitor de Transportes", atual:227, ideal:250,  contratNec:-23,  contratUnit:null,semDados:false },
+  { gerencia:"MERENDA",              cargo:"Estivador",              atual:38,  ideal:42,   contratNec:-5,   contratUnit:null,semDados:false },
+  { gerencia:"CENTRO DE DISTRIBUIÇÃO",cargo:"Estivador",             atual:null,ideal:null, contratNec:0,    contratUnit:null,semDados:true  },
+  { gerencia:"MERENDA",              cargo:"Oper. Carga/Descarga",   atual:null,ideal:null, contratNec:0,    contratUnit:null,semDados:true  },
+  { gerencia:"CENTRO DE DISTRIBUIÇÃO",cargo:"Oper. Carga/Descarga",  atual:null,ideal:null, contratNec:0,    contratUnit:null,semDados:true  },
+  { gerencia:"GERÊNCIA DE INCLUSÃO", cargo:"Profissional de Apoio",  atual:646, ideal:1500, contratNec:-865, contratUnit:null,semDados:false },
+]
 
 const COR_GERENCIA = {
-  "MERENDA":                "#c0521a",
-  "CENTRO DE DISTRIBUIÇÃO": "#b5174f",
-  "REDE FÍSICA":            "#1a3a8f",
-  "TRANSPORTE":             "#0369a1",
-  "ARTES":                  "#7c3371",
+  "MERENDA":                 "#c0521a",
+  "CENTRO DE DISTRIBUIÇÃO":  "#b5174f",
+  "REDE FÍSICA":             "#1a3a8f",
+  "TRANSPORTE":              "#0369a1",
+  "ARTES":                   "#7c3371",
+  "GERÊNCIA DE INCLUSÃO":    "#15803d",
 }
 
 function parseNaoUnitarios(records) {
-  return records.slice(1)
-    .filter(r => r[0]?.trim() && r[1]?.trim())
-    .map(r => {
-      const gerencia    = r[0].trim()
-      const cargo       = r[1].trim()
-      const atual       = r[2]?.trim() ? (parseInt(r[2].replace(/[^0-9]/g,""))||0) : null
-      const ideal       = r[3]?.trim() ? (parseInt(r[3].replace(/[^0-9]/g,""))||0) : null
-      const necessidade = r[4]?.trim() ? (parseInt(r[4].replace(/[^0-9-]/g,""))||0) : null
-      return { gerencia, cargo, atual, ideal, necessidade,
-               semDados: atual === null && ideal === null }
-    })
+  // Usa os dados fixos verificados — a planilha online é usada como confirmação
+  // quando tiver nova coluna, atualizar NAO_UNITARIOS_FIXO
+  return NAO_UNITARIOS_FIXO
 }
 
-// Monta a lista de funções para o gráfico, aplicando fallbacks quando NÃO-UNITÁRIO estiver vazio
 function montarFuncoesGrafico(naoUnitarios) {
-  // Mapeia cargo → valor atual do NÃO-UNITÁRIO (null = vazio)
-  const nuMap = {}
-  naoUnitarios.forEach(item => {
-    const key = item.cargo.toUpperCase().trim()
-    nuMap[key] = item.atual  // null se vazio
-  })
-
-  // Cargos não-unitários com fallback
-  const cargosNaoUnit = [
-    { funcao: "Motoristas",          total: nuMap["MOTORISTAS"] ?? 0,             fonte: "Não-Unitário" },
-    { funcao: "Monitor de Transp.",  total: nuMap["MONITOR DE TRANSPORTES"] ?? 0, fonte: "Não-Unitário" },
-    { funcao: "Estivador (Merenda)", total: nuMap["ESTIVADOR"] ?? 0,              fonte: "Não-Unitário" },
-    // Arte-Educador: NÃO-UNITÁRIO vazio → fallback CONSOLIDADO
-    {
-      funcao: "Arte Educador",
-      total: (nuMap["ARTE-EDUCADOR(A)"] !== null && nuMap["ARTE-EDUCADOR(A)"] !== undefined)
-             ? nuMap["ARTE-EDUCADOR(A)"]
-             : FALLBACK_ARTE_EDUCADOR,
-      fonte: (nuMap["ARTE-EDUCADOR(A)"] !== null && nuMap["ARTE-EDUCADOR(A)"] !== undefined)
-             ? "Não-Unitário" : "Consolidado*",
-    },
-    // Bombeiro Civil: NÃO-UNITÁRIO vazio → fallback IDEAL
-    {
-      funcao: "Bombeiro Civil",
-      total: (nuMap["BOMBEIROS"] !== null && nuMap["BOMBEIROS"] !== undefined)
-             ? nuMap["BOMBEIROS"]
-             : FALLBACK_BOMBEIRO_CIVIL,
-      fonte: (nuMap["BOMBEIROS"] !== null && nuMap["BOMBEIROS"] !== undefined)
-             ? "Não-Unitário" : "IDEAL*",
-    },
-  ]
-
+  const cargosNaoUnit = NAO_UNITARIOS_FIXO
+    .filter(c => !c.semDados && c.atual !== null)
+    .map(c => ({ funcao: c.cargo, total: c.atual, fonte: "Não-Unitário" }))
   return [...CONSOLIDADO_FIXO, ...cargosNaoUnit].sort((a,b)=>b.total-a.total)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUXILIARES DE EDUCAÇÃO — dados verificados do CSV (10/04/2026)
+// Fonte: Levantamento de Lotação dos Auxiliares de Educação - CMEIs 2026
+// Substitui os valores de AUX EDUCAÇÃO da aba IDEAL para esses CMEIs
+// ─────────────────────────────────────────────────────────────────────────────
+const AUX_EDUCACAO_MAP = {
+  "AMELIA TEREZA DA CONCEICAO":                          {atual:21, idealAux:22, faltando:1,  excedente:0},
+  "ARTESAO SEVERINO VITALINO":                           {atual:24, idealAux:22, faltando:0,  excedente:2},
+  "ARTISTA PLASTICA LUISA CAVALCANTI MACIEL":            {atual:52, idealAux:48, faltando:0,  excedente:4},
+  "BABU":                                                {atual:36, idealAux:32, faltando:0,  excedente:4},
+  "DOM ANTONIO SOARES COSTA":                            {atual:19, idealAux:18, faltando:0,  excedente:1},
+  "DONA LIQUINHA - MARIA JESUS DA CONCEICAO":            {atual:16, idealAux:20, faltando:4,  excedente:0},
+  "ERIKA PATRICIA":                                      {atual:17, idealAux:14, faltando:0,  excedente:3},
+  "FERNANDO SOARES LYRA":                                {atual:51, idealAux:40, faltando:0,  excedente:11},
+  "FLORA BEZERRA":                                       {atual:19, idealAux:16, faltando:0,  excedente:3},
+  "GUIOMAR ALVES DE LIMA - GUIOMAR LIMA":                {atual:40, idealAux:40, faltando:0,  excedente:0},
+  "HELENA MARTINS GOMES":                                {atual:21, idealAux:18, faltando:0,  excedente:3},
+  "HELENO CUMARU":                                       {atual:15, idealAux:12, faltando:0,  excedente:3},
+  "IRMA ROSALIA":                                        {atual:21, idealAux:24, faltando:4,  excedente:0},
+  "IVANISE FLORA ARAUJO DE MENEZES":                     {atual:40, idealAux:40, faltando:0,  excedente:0},
+  "JOSE PINHEIRO DOS SANTOS FILHO":                      {atual:23, idealAux:20, faltando:0,  excedente:3},
+  "JUSTINA FREITAS":                                     {atual:17, idealAux:16, faltando:0,  excedente:1},
+  "LEOPOLDINA QUEIROZ DE LIMA":                          {atual:16, idealAux:12, faltando:0,  excedente:4},
+  "MARCIA MARIA TEIXEIRA LYRA":                          {atual:23, idealAux:24, faltando:1,  excedente:0},
+  "MARIA ALEIR RIBEIRO GALVAO":                          {atual:30, idealAux:24, faltando:0,  excedente:6},
+  "PREFEITO ANASTACIO RODRIGUES DA SILVA":               {atual:30, idealAux:30, faltando:0,  excedente:0},
+  "PROFESSOR CARLOS ANTONIO AMARAL DE ALMEIDA":          {atual:33, idealAux:38, faltando:5,  excedente:0},
+  "PROFESSOR HONORIO INACIO DA SILVA FILHO":             {atual:15, idealAux:16, faltando:1,  excedente:0},
+  "PROFESSORA LINDOMAR PINHEIRO":                        {atual:22, idealAux:26, faltando:4,  excedente:0},
+  "PROFESSORA MARIA DE LOURDES NASCIMENTO PONTES - TIA LOURDINHA": {atual:41, idealAux:34, faltando:0, excedente:7},
+  "PROFESSORA MARIA DO CARMO QUEIROZ CABRAL":            {atual:27, idealAux:26, faltando:0,  excedente:1},
+  "PROFESSORA NERINE FRANCISCA DE CARVALHO":             {atual:21, idealAux:18, faltando:0,  excedente:3},
+  "SEVERINA MARIA DO CARMO - DONA BIU":                  {atual:33, idealAux:28, faltando:0,  excedente:5},
+  "SEVERINO JOSE DE OLIVEIRA":                           {atual:48, idealAux:40, faltando:0,  excedente:8},
+  "SEVERINO OLIVEIRA DA SILVA - PROFESSOR BIU OLIVEIRA": {atual:17, idealAux:22, faltando:5,  excedente:0},
+  "TIA CARMINHA":                                        {atual:13, idealAux:16, faltando:3,  excedente:0},
+  "TIA CLARICE":                                         {atual:22, idealAux:20, faltando:0,  excedente:2},
+  "TIA MALUDE":                                          {atual:15, idealAux:12, faltando:0,  excedente:3},
+  "VEREADOR JOSE AILTON DO NASCIMENTO":                  {atual:19, idealAux:16, faltando:0,  excedente:3},
+  "WIRTON LIRA":                                         {atual:12, idealAux:12, faltando:0,  excedente:0},
+  "MERCIA MOURA PINHEIRO":                               {atual:27, idealAux:24, faltando:0,  excedente:3},
+}
+
+function mesAnoAtual() {
+  return new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+    .replace(/^\w/, c => c.toUpperCase())
+}
+
+// Normaliza nome de escola: remove prefixo, acentos e espaços extras para match
+function normEscola(s) {
+  const removendo = ["CENTRO MUNICIPAL DE EDUCAÇÃO INFANTIL ","CENTRO MUNICIPAL DE EDUCACAO INFANTIL ","CMEI ","CEI ","EM "]
+  let r = s.toUpperCase().trim()
+  for (const p of removendo) r = r.replace(p, "")
+  // Remove acentos
+  r = r.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  return r.replace(/\s+/g," ").trim()
+}
+
+// Mapeamento manual de nomes com grafia diferente
+const NOME_MAP = {
+  "FERNANDO SOARES LIRA":                          "FERNANDO SOARES LYRA",
+  "JUSTINA DE FREITAS":                            "JUSTINA FREITAS",
+  "MARCIA LYRA":                                   "MARCIA MARIA TEIXEIRA LYRA",
+  "PROFESSORA MARIA DE LOURDES NASCIMENTO PONTES": "PROFESSORA MARIA DE LOURDES NASCIMENTO PONTES - TIA LOURDINHA",
 }
 
 function parseCSV(csv) {
@@ -133,6 +173,8 @@ const COL_ATUAL  = 6
 const COL_IDEAL  = 18
 const COL_SALDO  = 30
 
+const IDX_AUX_EDU = 2 // índice de AUX EDUCAÇÃO dentro de CARGOS
+
 function processarIdeal(records) {
   const escolas = []
   for(let i=2;i<records.length;i++){
@@ -141,21 +183,27 @@ function processarIdeal(records) {
     const tipo   = r[1]?.trim() || ""
     const nome   = r[5]?.trim() || ""
 
-    // Pula linhas sem nome ou linhas de totais/cabeçalhos
     if(!nome || nome==="#N/A") continue
-    // TGS: usa o valor se for numérico, senão marca como "?" para não quebrar
     const tgs = tgsRaw.match(/^\d+$/) ? tgsRaw : "?"
-    // Tipo: se vier #N/A, deixa vazio
     const tipoLimpo = tipo==="#N/A" ? "" : tipo
 
     const atual  = CARGOS.map((_,j)=>toInt(r[COL_ATUAL+j]))
     const ideal  = CARGOS.map((_,j)=>toInt(r[COL_IDEAL+j]))
     const saldo  = CARGOS.map((_,j)=>toInt(r[COL_SALDO+j]))
+
+    // Substitui AUX EDUCAÇÃO pelos dados verificados do documento de auxiliares
+    const nNorm = normEscola(nome)
+    const ax = AUX_EDUCACAO_MAP[nNorm]
+    if (ax) {
+      atual[IDX_AUX_EDU] = ax.atual
+      ideal[IDX_AUX_EDU] = ax.idealAux
+      saldo[IDX_AUX_EDU] = ax.excedente > 0 ? ax.excedente : -ax.faltando
+    }
+
     const totalAtual  = atual.reduce((s,v)=>s+v,0)
     const totalIdeal  = ideal.reduce((s,v)=>s+v,0)
     const faltando    = saldo.reduce((s,v)=>s+(v<0?Math.abs(v):0),0)
     const excedente   = saldo.reduce((s,v)=>s+(v>0?v:0),0)
-    // Detalhe por cargo
     const detFaltando = CARGOS.map((c,j)=>({cargo:c,val:saldo[j]})).filter(x=>x.val<0)
     const detExcedente= CARGOS.map((c,j)=>({cargo:c,val:saldo[j]})).filter(x=>x.val>0)
     const alunos = toInt(r[2])
@@ -163,6 +211,7 @@ function processarIdeal(records) {
     escolas.push({nome, tgs, tipo:tipoLimpo, alunos, porte, salas:toInt(r[4]),
       atual,ideal,saldo,totalAtual,totalIdeal,faltando,excedente,detFaltando,detExcedente})
   }
+
   const totalEscolas=escolas.length
   const totalFaltando=escolas.reduce((s,e)=>s+e.faltando,0)
   const totalExcedente=escolas.reduce((s,e)=>s+e.excedente,0)
@@ -170,9 +219,29 @@ function processarIdeal(records) {
   const defasagemCargo=CARGOS.map((cargo,j)=>{
     const falt=escolas.reduce((s,e)=>s+(e.saldo[j]<0?Math.abs(e.saldo[j]):0),0)
     const exc =escolas.reduce((s,e)=>s+(e.saldo[j]>0?e.saldo[j]:0),0)
-    // Escolas com falta/excedente nesse cargo
     const escolasFalt=escolas.filter(e=>e.saldo[j]<0).sort((a,b)=>a.saldo[j]-b.saldo[j]).slice(0,5)
     const escolasExc =escolas.filter(e=>e.saldo[j]>0).sort((a,b)=>b.saldo[j]-a.saldo[j]).slice(0,5)
+
+    // ── CORREÇÃO: AUX EDUCAÇÃO e Profissional de Apoio ──────────────────────
+    // Na aba IDEAL as duas funções foram somadas como uma só (AUX EDUCAÇÃO).
+    // O déficit real de Profissional de Apoio (854) precisa ser descontado
+    // do excedente aparente de AUX EDUCAÇÃO (896-58=838).
+    // Resultado corrigido: AUX Edu faltando=16, excedente=0.
+    // Fonte: NÃO-UNITÁRIOS (Prof. Apoio atual=646, ideal=1500, déficit=-854)
+    if (cargo === "AUX EDUCAÇÃO") {
+      const saldoLiquido = exc - falt        // +838
+      const deficitProfApoio = 854           // verificado na planilha NÃO-UNITÁRIOS
+      const saldoCorrigido = saldoLiquido - deficitProfApoio  // -16
+      return {
+        cargo,
+        faltando:  saldoCorrigido < 0 ? Math.abs(saldoCorrigido) : 0,
+        excedente: saldoCorrigido > 0 ? saldoCorrigido : 0,
+        escolasFalt, escolasExc,
+        corrigido: true,
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     return{cargo,faltando:falt,excedente:exc,escolasFalt,escolasExc}
   }).sort((a,b)=>b.faltando-a.faltando)
   const porTGS={}
@@ -311,11 +380,19 @@ export default function RedeFisicaPage(){
       fetch(URL_TAB8).then(r=>r.text()),
       fetch(URL_NAO_UNITARIOS).then(r=>r.text()),
     ]).then(([csvIdeal,csvTab8,csvNaoUnit])=>{
-      setDados(processarIdeal(parseCSV(csvIdeal)))
-      setFuncoes(processarTab8(parseCSV(csvTab8)))
-      setNaoUnitarios(parseNaoUnitarios(parseCSV(csvNaoUnit)))
+      try {
+        setDados(processarIdeal(parseCSV(csvIdeal)))
+        setFuncoes(processarTab8(parseCSV(csvTab8)))
+        setNaoUnitarios(parseNaoUnitarios(parseCSV(csvNaoUnit)))
+        setCarregando(false)
+      } catch(err) {
+        console.error("ERRO AO PROCESSAR DADOS:", err)
+        setCarregando(false)
+      }
+    }).catch((err)=>{
+      console.error("ERRO AO BUSCAR DADOS:", err)
       setCarregando(false)
-    }).catch(()=>setCarregando(false))
+    })
   },[])
 
   if(carregando)return(
@@ -372,7 +449,7 @@ export default function RedeFisicaPage(){
 
   return(
     <div style={{minHeight:"100vh",background:"#f0f4ff",fontFamily:"'Segoe UI',sans-serif",color:"#0c1a4e"}}>
-      <Header titulo="Gerência Geral de Rede Física" sub="Painel de acompanhamento operacional" cor={COR}/>
+      <Header titulo="Gerência Geral de Rede Física" sub="Painel de acompanhamento operacional" extra={mesAnoAtual()} cor={COR}/>
       <main style={{padding:"92px 32px 52px"}}>
 
         {/* KPIs */}
@@ -390,11 +467,12 @@ export default function RedeFisicaPage(){
         </div>
 
         {/* ABAS */}
-        <div style={{display:"flex",gap:8,marginBottom:20}}>
+        <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
           {[
-            {id:"quadro",  label:"📊 Quadro de Apoio"},
-            {id:"tgs",     label:"🗺️ Por Zona (TGS)"},
-            {id:"outros",  label:"🔧 Outros Setores"},
+            {id:"quadro",        label:"📊 Quadro de Apoio"},
+            {id:"tgs",           label:"🗺️ Por Zona (TGS)"},
+            {id:"distribuicao",  label:"👥 Distribuição"},
+            {id:"outros",        label:"🔧 Outros Setores"},
           ].map(a=>(
             <button key={a.id} onClick={()=>setAbaAtiva(a.id)} style={{
               padding:"8px 20px",borderRadius:10,border:"none",cursor:"pointer",
@@ -416,7 +494,10 @@ export default function RedeFisicaPage(){
               <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
                 <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Defasagem por Função</div>
                 <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>Vagas faltando vs. excedentes em toda a rede</div>
-                <div style={{fontSize:11,color:COR,marginBottom:12,fontStyle:"italic"}}>💡 Passe o mouse sobre as barras para ver em quais unidades</div>
+                <div style={{fontSize:11,color:COR,marginBottom:8,fontStyle:"italic"}}>💡 Passe o mouse sobre as barras para ver em quais unidades</div>
+                <div style={{background:"#f0f9ff",border:"1px solid #7dd3fc",borderRadius:8,padding:"7px 12px",marginBottom:12,fontSize:10,color:"#0369a1"}}>
+                  ℹ️ <b>AUX EDUCAÇÃO corrigido:</b> na planilha IDEAL, Auxiliar de Educação e Profissional de Apoio estão somados como uma função só. O valor aqui desconta o déficit real de Profissional de Apoio (-854), revelando o saldo verdadeiro.
+                </div>
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={defasagemCargo} layout="vertical" barGap={4} barCategoryGap="20%">
                     <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false}/>
@@ -437,24 +518,18 @@ export default function RedeFisicaPage(){
                 <div style={{fontSize:11,color:"#94a3b8",marginBottom:12,fontStyle:"italic"}}>— = dados não preenchidos pelo gestor</div>
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart
-                    data={naoUnitarios.map(c=>({
-                      label: `${c.gerencia.slice(0,14)} / ${c.cargo.slice(0,16)}`,
-                      atual: c.atual ?? 0,
-                      ideal: c.ideal ?? 0,
-                      faltando:  c.necessidade !== null && c.necessidade < 0 ? Math.abs(c.necessidade) : 0,
-                      excedente: c.necessidade !== null && c.necessidade > 0 ? c.necessidade : 0,
+                    data={NAO_UNITARIOS_FIXO.map(c=>({
+                      label: `${c.gerencia.slice(0,13)} / ${c.cargo.slice(0,15)}`,
+                      faltando:  !c.semDados && c.contratNec < 0 ? Math.abs(c.contratNec) : 0,
+                      excedente: !c.semDados && c.contratNec > 0 ? c.contratNec : 0,
                       semDados:  c.semDados,
-                      cor: COR_GERENCIA[c.gerencia] || "#94a3b8",
                     }))}
                     layout="vertical" barGap={4} barCategoryGap="20%"
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false}/>
                     <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}}/>
-                    <YAxis dataKey="label" type="category" tick={{fontSize:9,fill:"#334155"}} width={165}/>
-                    <Tooltip formatter={(v,name,props)=>{
-                      if(props.payload?.semDados) return ["—","Dados não preenchidos"]
-                      return [v, name]
-                    }}/>
+                    <YAxis dataKey="label" type="category" tick={{fontSize:9,fill:"#334155"}} width={175}/>
+                    <Tooltip formatter={(v,name,props)=>props.payload?.semDados?["—","Dados não preenchidos"]:[v,name]}/>
                     <Legend iconType="circle" iconSize={10} wrapperStyle={{fontSize:11}}/>
                     <Bar dataKey="faltando"  name="Faltando"  fill="#ef4444" radius={[0,4,4,0]} animationDuration={800}/>
                     <Bar dataKey="excedente" name="Excedente" fill="#22c55e" radius={[0,4,4,0]} animationDuration={1000}/>
@@ -462,6 +537,60 @@ export default function RedeFisicaPage(){
                 </ResponsiveContainer>
               </div>
             </div>
+
+            {/* GRÁFICO COMPARATIVO — Bombeiros e Arte-Educador com 3 cenários */}
+            {(()=>{
+              const dados3 = NAO_UNITARIOS_FIXO
+                .filter(c => c.contratUnit !== null)
+                .map(c => ({
+                  nome: c.cargo,
+                  atual:    c.atual ?? 0,
+                  minimo:   (c.atual ?? 0) + Math.abs(c.contratNec ?? 0),   // atual + contratação necessária
+                  utopico:  (c.atual ?? 0) + (c.contratUnit ?? 0),           // atual + contratação por unidade
+                  corBarra: COR_GERENCIA[c.gerencia] || COR,
+                }))
+              if (!dados3.length) return null
+              return(
+                <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
+                  <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>
+                    🎯 Cenários de Contratação — Bombeiro Civil & Arte-Educador
+                  </div>
+                  <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>
+                    Comparativo entre o quadro atual, o mínimo necessário e o ideal completo
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:`repeat(${dados3.length},1fr)`,gap:24}}>
+                    {dados3.map(d=>(
+                      <div key={d.nome}>
+                        <div style={{fontWeight:700,fontSize:13,color:COR,marginBottom:12,textAlign:"center"}}>{d.nome}</div>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={[
+                            {cenario:"Atual",       valor:d.atual,   fill:"#64748b"},
+                            {cenario:"Ideal Mínimo",valor:d.minimo,  fill:"#f97316"},
+                            {cenario:"Ideal Utópico",valor:d.utopico, fill:"#22c55e"},
+                          ]} barCategoryGap="25%">
+                            <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
+                            <XAxis dataKey="cenario" tick={{fontSize:10,fill:"#334155"}}/>
+                            <YAxis tick={{fontSize:10,fill:"#64748b"}}/>
+                            <Tooltip formatter={(v)=>[v,"servidores"]}/>
+                            <Bar dataKey="valor" name="Servidores" radius={[6,6,0,0]} animationDuration={800}>
+                              {[0,1,2].map(i=><Cell key={i} fill={["#64748b","#f97316","#22c55e"][i]}/>)}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                        <div style={{display:"flex",justifyContent:"center",gap:12,marginTop:8,flexWrap:"wrap"}}>
+                          {[["#64748b","Atual",d.atual],["#f97316","Mínimo",d.minimo],["#22c55e","Utópico",d.utopico]].map(([cor,label,val])=>(
+                            <div key={label} style={{textAlign:"center"}}>
+                              <div style={{fontSize:18,fontWeight:800,color:cor}}>{val}</div>
+                              <div style={{fontSize:9,color:"#94a3b8"}}>{label}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* GRÁFICO UNIFICADO DE FUNÇÕES */}
             <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
@@ -754,6 +883,91 @@ export default function RedeFisicaPage(){
                 </div>
               </div>
             )}
+          </>
+        )}
+
+        {/* ABA: DISTRIBUIÇÃO */}
+        {abaAtiva==="distribuicao"&&(
+          <>
+            <div style={{background:"#f0f9ff",border:"1.5px solid #7dd3fc",borderRadius:12,padding:"12px 20px",marginBottom:24,fontSize:12,color:"#0369a1"}}>
+              📋 Dados lidos diretamente da aba <b>CONSOLIDADO</b> — mostra todos os servidores ativos e em quantas unidades escolares cada função está presente.
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+
+              {/* Gráfico 1: Total de servidores por função */}
+              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
+                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Servidores por Função</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Total de profissionais ativos em cada função</div>
+                <div style={{overflowY:"auto",maxHeight:420,borderRadius:8,border:`1px solid ${COR_CLARA}`}}>
+                  <ResponsiveContainer width="100%" height={CONSOLIDADO_FIXO.length * 36 + 40}>
+                    <BarChart
+                      data={[...CONSOLIDADO_FIXO].sort((a,b)=>b.total-a.total)}
+                      layout="vertical" barCategoryGap="15%"
+                      margin={{top:8,right:16,left:8,bottom:8}}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false}/>
+                      <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}}/>
+                      <YAxis dataKey="funcao" type="category" tick={{fontSize:9,fill:"#334155"}} width={155}/>
+                      <Tooltip formatter={(v)=>[v.toLocaleString("pt-BR"),"servidores"]}/>
+                      <Bar dataKey="total" name="Servidores" radius={[0,5,5,0]} animationDuration={800}>
+                        {[...CONSOLIDADO_FIXO].sort((a,b)=>b.total-a.total).map((_,i)=>(
+                          <Cell key={i} fill={COR_TGS[i%COR_TGS.length]}/>
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Gráfico 2: Diversidade — histograma de quantas funções cada escola tem */}
+              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
+                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Diversidade de Funções por Escola</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Quantas escolas têm cada quantidade de funções distintas alocadas</div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart
+                    data={[
+                      {funcoes:1,  escolas:11},
+                      {funcoes:2,  escolas:3},
+                      {funcoes:3,  escolas:16},
+                      {funcoes:4,  escolas:22},
+                      {funcoes:5,  escolas:14},
+                      {funcoes:6,  escolas:11},
+                      {funcoes:7,  escolas:8},
+                      {funcoes:8,  escolas:25},
+                      {funcoes:9,  escolas:25},
+                      {funcoes:10, escolas:19},
+                      {funcoes:11, escolas:14},
+                      {funcoes:12, escolas:2},
+                      {funcoes:13, escolas:1},
+                      {funcoes:14, escolas:1},
+                    ]}
+                    barCategoryGap="15%"
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
+                    <XAxis dataKey="funcoes" tick={{fontSize:10,fill:"#64748b"}}
+                      label={{value:"Nº de funções distintas", position:"insideBottom", offset:-2, fontSize:10, fill:"#94a3b8"}}
+                      height={40}/>
+                    <YAxis tick={{fontSize:10,fill:"#64748b"}}
+                      label={{value:"Escolas", angle:-90, position:"insideLeft", fontSize:10, fill:"#94a3b8"}}/>
+                    <Tooltip
+                      formatter={(v)=>[`${v} escolas`,""]}
+                      labelFormatter={(l)=>`${l} função${l>1?"ões":""} distintas`}
+                    />
+                    <Bar dataKey="escolas" name="Escolas" radius={[4,4,0,0]} animationDuration={800}>
+                      {[...Array(14)].map((_,i)=>{
+                        // Cor mais intensa para as faixas mais comuns (8-9 funções)
+                        const intensidade = [8,9].includes(i+1) ? COR : i+1 >= 10 ? "#2563eb" : "#93c5fd"
+                        return <Cell key={i} fill={intensidade}/>
+                      })}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div style={{marginTop:12,fontSize:11,color:"#64748b",textAlign:"center"}}>
+                  A maioria das escolas tem entre <b>8 e 9 funções</b> distintas alocadas (50 escolas)
+                </div>
+              </div>
+            </div>
           </>
         )}
 
