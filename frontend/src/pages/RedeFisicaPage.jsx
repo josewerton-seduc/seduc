@@ -12,7 +12,6 @@ const COR_BORDA = "#a0b4f0"
 const URL_IDEAL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQqcDF_wR7lKG8A39apK5BeEmSQarUis82_Rt-CK7vp0bm6YywKq-v7CsFtS0T4jXO2VMZonEWzuj31/pub?gid=1020668231&single=true&output=csv"
 
 // CONSOLIDADO — contagem real da aba CONSOLIDADO (verificado 10/04/2026)
-// Total: 5.051 servidores · 21 funções principais · fonte única, sem dupla contagem
 const CONSOLIDADO_FIXO = [
   { funcao: "AUX DE EDUCAÇÃO",        total: 1154, unidades: 114 },
   { funcao: "ASG",                    total: 692,  unidades: 181 },
@@ -38,7 +37,6 @@ const CONSOLIDADO_FIXO = [
 ]
 const TOTAL_CONSOLIDADO = CONSOLIDADO_FIXO.reduce((s,f)=>s+f.total,0)
 
-// CARGOS NÃO-UNITÁRIOS — dados diretos da aba (10/04/2026)
 const NAO_UNITARIOS = [
   { gerencia:"MERENDA",               cargo:"ESTIVADOR",              atual:36,  ideal:42,   contratNec:-6,   contratUnit:null },
   { gerencia:"CENTRO DE DISTRIBUIÇÃO",cargo:"OPER CARGA DESCARGA",    atual:23,  ideal:25,   contratNec:-2,   contratUnit:null },
@@ -117,8 +115,10 @@ function parseCSV(csv){
 }
 function toInt(v){return parseInt((v||"").replace(/[^0-9-]/g,""))||0}
 
-const CARGOS=["ASG","AUX ADM","AUX EDUCAÇÃO","COORD. PÁTIO","LACTARISTA","LAVADEIRA","MERENDEIRO","PORTEIRO","ANALISTA ADM","BOMBEIRO CIVIL"]
-const COL_ATUAL=6,COL_IDEAL=18,COL_SALDO=30,IDX_AUX_EDU=2
+// Estrutura da aba IDEAL (verificado 11/04/2026):
+// col 6-14 = NÚMEROS ATUAIS | col 15-23 = NÚMEROS IDEAIS | col 24-32 = SALDO FINAL
+const CARGOS=["ASG","AUX ADM","AUX DE EDUCAÇÃO","COORDENADOR DE PÁTIO","LACTARISTA","LAVADEIRA","MERENDEIRA(O)","PORTEIRO","ANALISTA ADM"]
+const COL_ATUAL=6,COL_IDEAL=15,COL_SALDO=24,IDX_AUX_EDU=2
 
 function processarIdeal(records){
   const escolas=[]
@@ -181,7 +181,6 @@ const statusStyle={"Concluído":{bg:"#dcfce7",cor:"#15803d"},"Em andamento":{bg:
 const COR_TIPO={"EM":"#1d7fc4","CMEI":"#2d6a4f","ETI":"#7c3371","CEI":"#c0521a"}
 const COR_TGS=["#1a3a8f","#2563eb","#3b82f6","#60a5fa","#93c5fd","#0369a1","#0284c7","#0ea5e9","#38bdf8"]
 
-// ── Tooltip personalizado: defasagem por cargo ───────────────────────────────
 function TooltipDefasagem({active,payload,label,defasagemCargo}){
   if(!active||!payload?.length)return null
   const item=defasagemCargo.find(d=>d.cargo===label)
@@ -213,7 +212,6 @@ function TooltipDefasagem({active,payload,label,defasagemCargo}){
   )
 }
 
-// ── Tooltip faltando/excedente na tabela de escolas ──────────────────────────
 function TooltipEscola({escola,tipo}){
   const itens=tipo==="faltando"?escola.detFaltando:escola.detExcedente
   if(!itens||itens.length===0)return null
@@ -245,24 +243,26 @@ function CelulaComTooltip({escola,tipo,valor}){
   )
 }
 
-// ── Tooltip de quadro de funcionários por escola (aba Distribuição) ──────────
-function TooltipFuncoesEscola({escola}){
-  if(!escola)return null
+// MUDANÇA 1: tooltip segue o mouse (position:fixed)
+function TooltipFuncoesEscola({escola, mousePos}){
+  if(!escola) return null
   const itens=Object.entries(escola.funcoes).sort((a,b)=>b[1]-a[1])
-  if(itens.length===0)return<div style={{position:"absolute",zIndex:999,background:"#fff",border:`1.5px solid ${COR_BORDA}`,borderRadius:10,padding:"10px 14px",fontSize:11,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",minWidth:220,whiteSpace:"nowrap",top:"50%",left:"105%",transform:"translateY(-50%)"}}>Sem servidores registrados</div>
   return(
-    <div style={{position:"absolute",zIndex:999,background:"#fff",border:`1.5px solid ${COR_BORDA}`,borderRadius:10,padding:"12px 16px",fontSize:11,boxShadow:"0 4px 20px rgba(0,0,0,0.18)",minWidth:240,whiteSpace:"nowrap",top:"50%",left:"105%",transform:"translateY(-50%)"}}>
-      <div style={{fontWeight:700,color:COR,marginBottom:8,fontSize:12}}>👥 Quadro de Funcionários</div>
+    <div style={{position:"fixed",zIndex:9999,background:"#fff",border:`1.5px solid ${COR_BORDA}`,borderRadius:10,padding:"12px 16px",fontSize:11,boxShadow:"0 4px 20px rgba(0,0,0,0.18)",minWidth:240,whiteSpace:"nowrap",pointerEvents:"none",top:mousePos.y+16,left:mousePos.x+16}}>
+      <div style={{fontWeight:700,color:COR,marginBottom:8,fontSize:12}}>👥 {escola.nome}</div>
       <div style={{borderBottom:`1px solid ${COR_CLARA}`,marginBottom:8,paddingBottom:4,display:"flex",justifyContent:"space-between"}}>
         <span style={{color:"#94a3b8",fontSize:10}}>FUNÇÃO</span>
         <span style={{color:"#94a3b8",fontSize:10}}>QTD</span>
       </div>
-      {itens.map(([func,qtd],i)=>(
-        <div key={i} style={{display:"flex",justifyContent:"space-between",gap:20,padding:"3px 0",borderBottom:"1px solid #f8faff"}}>
-          <span style={{color:"#334155"}}>{func}</span>
-          <span style={{fontWeight:700,color:COR}}>{qtd}</span>
-        </div>
-      ))}
+      {itens.length===0
+        ?<div style={{color:"#94a3b8"}}>Sem servidores registrados</div>
+        :itens.map(([func,qtd],i)=>(
+          <div key={i} style={{display:"flex",justifyContent:"space-between",gap:20,padding:"3px 0",borderBottom:"1px solid #f8faff"}}>
+            <span style={{color:"#334155"}}>{func}</span>
+            <span style={{fontWeight:700,color:COR}}>{qtd}</span>
+          </div>
+        ))
+      }
       <div style={{borderTop:`1px solid ${COR_CLARA}`,marginTop:6,paddingTop:6,display:"flex",justifyContent:"space-between"}}>
         <span style={{color:"#475569",fontWeight:600}}>Total</span>
         <span style={{fontWeight:800,color:COR}}>{escola.total}</span>
@@ -281,95 +281,180 @@ const TooltipCustom=({active,payload,label})=>{
   )
 }
 
-// CONSOLIDADO_POR_ESCOLA — quadro de funcionários por unidade (fonte: aba CONSOLIDADO)
-// Gerado automaticamente em 10/04/2026 — 251 unidades
+// CONSOLIDADO_POR_ESCOLA — dados reais da aba CONSOLIDADO (172 escolas · 11/04/2026)
 const CONSOLIDADO_POR_ESCOLA = [
-  {tipo:"EM",nome:"ABÍLIO LUÍS DE TORRES",total:10,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"ADELINO ALVES DA SILVA",total:7,funcoes:{"ASG":2,"PORTEIRO":2,"MERENDEIRA(O)":2,"AUX DE EDUCAÇÃO":1}},
-  {tipo:"EM",nome:"ALFREDO PINTO VIEIRA DE MELO",total:9,funcoes:{"PORTEIRO":5,"ASG":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1}},
-  {tipo:"CMEI",nome:"AMÉLIA TEREZA DA CONCEIÇÃO",total:39,funcoes:{"AUX DE EDUCAÇÃO":22,"ASG":6,"PORTEIRO":3,"MERENDEIRA(O)":2,"LAVADEIRA":2,"LACTARISTA":2,"ANALISTA ADM":1,"ZELADOR/MANUTENÇÃO":1}},
-  {tipo:"EM",nome:"ANTONIA MARIA DA CONCEIÇÃO COSTA",total:8,funcoes:{"PORTEIRO":3,"ASG":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ZELADOR/MANUTENÇÃO":1}},
-  {tipo:"EM",nome:"ANTÔNIO ALVES BEZERRA",total:11,funcoes:{"PORTEIRO":5,"ASG":2,"PROFISSIONAL DE APOIO":1,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"COORDENADOR DE PÁTIO":1}},
-  {tipo:"EM",nome:"ANTÔNIO LINS DE VASCONCELOS",total:13,funcoes:{"PORTEIRO":4,"ASG":3,"PROFISSIONAL DE APOIO":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"COORDENADOR DE PÁTIO":1,"ANALISTA ADM":1}},
-  {tipo:"ETI",nome:"ANTÔNIO MENDONÇA FILHO",total:27,funcoes:{"COORDENADOR DE PÁTIO":9,"ASG":7,"MERENDEIRA(O)":4,"PORTEIRO":3,"PROFISSIONAL DE APOIO":2,"AUX ADM":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"ARTUR OLIVEIRA",total:11,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"COORDENADOR DE PÁTIO":1,"ANALISTA ADM":1}},
-  {tipo:"CMEI",nome:"ARTESÃO SEVERINO VITALINO",total:49,funcoes:{"AUX DE EDUCAÇÃO":24,"ASG":4,"MERENDEIRA(O)":3,"PORTEIRO":3,"AUX ADM":1,"ANALISTA ADM":1,"LAVADEIRA":3,"LACTARISTA":3,"PROFISSIONAL DE APOIO":1,"ZELADOR/MANUTENÇÃO":1}},
-  {tipo:"CMEI",nome:"ARTISTA PLÁSTICA LUÍSA CAVALCANTI MACIEL",total:66,funcoes:{"AUX DE EDUCAÇÃO":52,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1,"PROFISSIONAL DE APOIO":1}},
-  {tipo:"EM",nome:"ASSIS CHATEAUBRIAND",total:16,funcoes:{"PORTEIRO":5,"ASG":4,"PROFISSIONAL DE APOIO":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"COORDENADOR DE PÁTIO":1,"ANALISTA ADM":1,"BOMBEIRO CIVIL":1}},
-  {tipo:"EM",nome:"AUGUSTO FERREIRA LIMA",total:10,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"CMEI",nome:"BABÚ",total:48,funcoes:{"AUX DE EDUCAÇÃO":36,"ASG":4,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"EM",nome:"BARÃO DE MAUÁ",total:12,funcoes:{"PORTEIRO":4,"ASG":3,"PROFISSIONAL DE APOIO":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"BENJAMIM ARAÚJO",total:9,funcoes:{"PORTEIRO":4,"ASG":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"BENTO FERREIRA DE MELO",total:10,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"CÂMARA CASCUDO",total:11,funcoes:{"PORTEIRO":4,"ASG":3,"PROFISSIONAL DE APOIO":1,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"CARNEIRO LEÃO",total:10,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"CMEI",nome:"CECÍLIA MEIRELES",total:12,funcoes:{"AUX DE EDUCAÇÃO":6,"ASG":2,"MERENDEIRA(O)":2,"PORTEIRO":2}},
-  {tipo:"EM",nome:"CIRILO TARGINO",total:9,funcoes:{"PORTEIRO":4,"ASG":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"ETI",nome:"CLÓVIS PESSOA CAVALCANTI",total:31,funcoes:{"COORDENADOR DE PÁTIO":8,"ASG":8,"MERENDEIRA(O)":5,"PORTEIRO":4,"PROFISSIONAL DE APOIO":3,"AUX ADM":2,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"CORONEL VIRGÍLIO MOTA",total:10,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"CMEI",nome:"DOM ANTÔNIO SOARES COSTA",total:33,funcoes:{"AUX DE EDUCAÇÃO":19,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1,"PROFISSIONAL DE APOIO":1}},
-  {tipo:"CMEI",nome:"DONA LIQUINHA - MARIA JESUS DA CONCEIÇÃO",total:30,funcoes:{"AUX DE EDUCAÇÃO":16,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1,"PROFISSIONAL DE APOIO":1}},
-  {tipo:"EM",nome:"DUDA UMBUZEIRO",total:14,funcoes:{"PORTEIRO":5,"ASG":3,"PROFISSIONAL DE APOIO":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1,"COORDENADOR DE PÁTIO":1}},
-  {tipo:"ETI",nome:"EDGAR VIEIRA DE MELO",total:29,funcoes:{"COORDENADOR DE PÁTIO":8,"ASG":7,"MERENDEIRA(O)":5,"PORTEIRO":4,"PROFISSIONAL DE APOIO":2,"AUX ADM":1,"ANALISTA ADM":1,"BOMBEIRO CIVIL":1}},
-  {tipo:"EM",nome:"EDMUNDO ROLIM",total:9,funcoes:{"PORTEIRO":4,"ASG":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"EPITÁCIO PESSOA",total:12,funcoes:{"PORTEIRO":4,"ASG":3,"PROFISSIONAL DE APOIO":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"CMEI",nome:"ÉRIKA PATRÍCIA",total:30,funcoes:{"AUX DE EDUCAÇÃO":17,"ASG":4,"MERENDEIRA(O)":3,"LACTARISTA":2,"PROFISSIONAL DE APOIO":1,"ANALISTA ADM":1,"LAVADEIRA":1,"ZELADOR/MANUTENÇÃO":1}},
-  {tipo:"CMEI",nome:"FERNANDO SOARES LYRA",total:62,funcoes:{"AUX DE EDUCAÇÃO":51,"ASG":4,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1}},
-  {tipo:"EM",nome:"FLORIANO PEIXOTO",total:9,funcoes:{"PORTEIRO":3,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"CMEI",nome:"FLORA BEZERRA",total:30,funcoes:{"AUX DE EDUCAÇÃO":19,"ASG":4,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LACTARISTA":1}},
-  {tipo:"EM",nome:"FRANCISCO ARAÚJO LIMA",total:9,funcoes:{"PORTEIRO":4,"ASG":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"FRANCISCO BARBOSA DA SILVA",total:8,funcoes:{"PORTEIRO":3,"ASG":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"FRANCISCO CARLOS FERREIRA DA SILVA",total:9,funcoes:{"PORTEIRO":4,"ASG":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"FRANCISCO FERRAZ DUARTE",total:8,funcoes:{"PORTEIRO":3,"ASG":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"FRANCELINO GUILHERME DE AZEVEDO",total:12,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":2,"MERENDEIRA(O)":1,"COORDENADOR DE PÁTIO":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"GRACILIANO RAMOS",total:13,funcoes:{"PORTEIRO":5,"ASG":3,"PROFISSIONAL DE APOIO":1,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"COORDENADOR DE PÁTIO":1,"ANALISTA ADM":1,"ZELADOR/MANUTENÇÃO":1}},
-  {tipo:"CMEI",nome:"GUIOMAR ALVES DE LIMA - GUIOMAR LIMA",total:54,funcoes:{"AUX DE EDUCAÇÃO":40,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":3,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"HELENA MARTINS GOMES",total:34,funcoes:{"AUX DE EDUCAÇÃO":21,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"HELENO CUMARU",total:27,funcoes:{"AUX DE EDUCAÇÃO":15,"ASG":4,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LACTARISTA":1,"LAVADEIRA":1}},
-  {tipo:"EM",nome:"HERMES FONTES",total:8,funcoes:{"PORTEIRO":3,"ASG":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"HORÁCIO DE ALMEIDA",total:10,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"JOÃO BARROS",total:11,funcoes:{"PORTEIRO":4,"ASG":3,"PROFISSIONAL DE APOIO":1,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"JOÃO XXIII",total:13,funcoes:{"PORTEIRO":5,"ASG":3,"PROFISSIONAL DE APOIO":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"JOEL PONTES",total:12,funcoes:{"PORTEIRO":5,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"COORDENADOR DE PÁTIO":1,"ANALISTA ADM":1}},
-  {tipo:"CMEI",nome:"IRMÃ ROSÁLIA",total:35,funcoes:{"AUX DE EDUCAÇÃO":21,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1,"PROFISSIONAL DE APOIO":1}},
-  {tipo:"CMEI",nome:"IVANISE FLORA ARAUJO DE MENEZES",total:55,funcoes:{"AUX DE EDUCAÇÃO":40,"ASG":6,"MERENDEIRA(O)":4,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"JOSÉ PINHEIRO DOS SANTOS FILHO",total:38,funcoes:{"AUX DE EDUCAÇÃO":23,"ASG":5,"MERENDEIRA(O)":4,"PORTEIRO":3,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"JUSTINA FREITAS",total:30,funcoes:{"AUX DE EDUCAÇÃO":17,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"EM",nome:"JOSÉ FAUSTINO VILA NOVA",total:11,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"COORDENADOR DE PÁTIO":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"JOSÉ IRINEU FERREIRA",total:9,funcoes:{"PORTEIRO":4,"ASG":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"LAURITZEN ARAÚJO",total:10,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"CMEI",nome:"LEOPOLDINA QUEIROZ DE LIMA",total:28,funcoes:{"AUX DE EDUCAÇÃO":16,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LACTARISTA":1}},
-  {tipo:"EM",nome:"LUÍS MARINHO",total:11,funcoes:{"PORTEIRO":4,"ASG":3,"PROFISSIONAL DE APOIO":1,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"ETI",nome:"LUÍSA DE MARILAC",total:28,funcoes:{"COORDENADOR DE PÁTIO":7,"ASG":7,"MERENDEIRA(O)":5,"PORTEIRO":4,"PROFISSIONAL DE APOIO":2,"AUX ADM":1,"ANALISTA ADM":1,"BOMBEIRO CIVIL":1}},
-  {tipo:"EM",nome:"MANOEL FÉLIX DE ALMEIDA",total:12,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":2,"MERENDEIRA(O)":1,"COORDENADOR DE PÁTIO":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"MARIA JOSÉ DE FRANÇA",total:11,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"COORDENADOR DE PÁTIO":1,"ANALISTA ADM":1}},
-  {tipo:"CMEI",nome:"MÁRCIA MARIA TEIXEIRA LYRA",total:37,funcoes:{"AUX DE EDUCAÇÃO":23,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1,"PROFISSIONAL DE APOIO":1}},
-  {tipo:"CMEI",nome:"MARIA ALEIR RIBEIRO GALVÃO",total:42,funcoes:{"AUX DE EDUCAÇÃO":30,"ASG":4,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"EM",nome:"MESTRE VITALINO",total:18,funcoes:{"PORTEIRO":6,"ASG":4,"PROFISSIONAL DE APOIO":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"COORDENADOR DE PÁTIO":1,"ANALISTA ADM":1,"BOMBEIRO CIVIL":1}},
-  {tipo:"CEI",nome:"MÉRCIA MOURA PINHEIRO",total:37,funcoes:{"AUX DE EDUCAÇÃO":24,"ASG":4,"PROFISSIONAL DE APOIO":2,"PORTEIRO":2,"MERENDEIRA(O)":3,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1,"BOMBEIRO CIVIL":2}},
-  {tipo:"EM",nome:"NOSSA SENHORA DE FÁTIMA",total:14,funcoes:{"PORTEIRO":5,"ASG":3,"PROFISSIONAL DE APOIO":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1,"BOMBEIRO CIVIL":1}},
-  {tipo:"EM",nome:"NUNES MENDONÇA",total:9,funcoes:{"PORTEIRO":4,"ASG":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"OLINTO VICTOR",total:10,funcoes:{"PORTEIRO":4,"ASG":3,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"PADRE PEDRO RECKZIEGEL",total:11,funcoes:{"PORTEIRO":4,"ASG":3,"PROFISSIONAL DE APOIO":1,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"EM",nome:"PAULINA MONTEIRO",total:12,funcoes:{"PORTEIRO":5,"ASG":3,"PROFISSIONAL DE APOIO":1,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"CMEI",nome:"PREFEITO ANASTÁCIO RODRIGUES DA SILVA",total:43,funcoes:{"AUX DE EDUCAÇÃO":30,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"PROFESSOR CARLOS ANTÔNIO AMARAL DE ALMEIDA",total:50,funcoes:{"AUX DE EDUCAÇÃO":33,"ASG":6,"MERENDEIRA(O)":4,"PORTEIRO":3,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1,"PROFISSIONAL DE APOIO":1}},
-  {tipo:"CMEI",nome:"PROFESSOR HONÓRIO INÁCIO DA SILVA FILHO",total:28,funcoes:{"AUX DE EDUCAÇÃO":15,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"PROFESSORA LINDOMAR PINHEIRO",total:34,funcoes:{"AUX DE EDUCAÇÃO":22,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1}},
-  {tipo:"CMEI",nome:"PROFESSORA MARIA DE LOURDES NASCIMENTO PONTES - TIA LOURDINHA",total:55,funcoes:{"AUX DE EDUCAÇÃO":41,"ASG":6,"MERENDEIRA(O)":4,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"PROFESSORA MARIA DO CARMO QUEIROZ CABRAL",total:42,funcoes:{"AUX DE EDUCAÇÃO":27,"ASG":6,"MERENDEIRA(O)":4,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"PROFESSORA NERINE FRANCISCA DE CARVALHO",total:34,funcoes:{"AUX DE EDUCAÇÃO":21,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"ETI",nome:"PROFESSOR ALTAIR NUNES PORTO FILHO",total:33,funcoes:{"COORDENADOR DE PÁTIO":9,"ASG":8,"MERENDEIRA(O)":6,"PORTEIRO":4,"PROFISSIONAL DE APOIO":3,"AUX ADM":1,"ANALISTA ADM":1,"BOMBEIRO CIVIL":1}},
-  {tipo:"EM",nome:"RUI BARBOSA",total:13,funcoes:{"PORTEIRO":5,"ASG":3,"PROFISSIONAL DE APOIO":2,"AUX DE EDUCAÇÃO":1,"MERENDEIRA(O)":1,"ANALISTA ADM":1}},
-  {tipo:"CMEI",nome:"SEVERINA MARIA DO CARMO - DONA BIU",total:47,funcoes:{"AUX DE EDUCAÇÃO":33,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1,"PROFISSIONAL DE APOIO":1}},
-  {tipo:"CMEI",nome:"SEVERINO JOSÉ DE OLIVEIRA",total:63,funcoes:{"AUX DE EDUCAÇÃO":48,"ASG":6,"MERENDEIRA(O)":4,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"SEVERINO OLIVEIRA DA SILVA - PROFESSOR BIU OLIVEIRA",total:30,funcoes:{"AUX DE EDUCAÇÃO":17,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"TIA CARMINHA",total:24,funcoes:{"AUX DE EDUCAÇÃO":13,"ASG":4,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"TIA CLARICE",total:37,funcoes:{"AUX DE EDUCAÇÃO":22,"ASG":6,"MERENDEIRA(O)":4,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"TIA MALUDE",total:28,funcoes:{"AUX DE EDUCAÇÃO":15,"ASG":5,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LACTARISTA":1,"PROFISSIONAL DE APOIO":1}},
-  {tipo:"CMEI",nome:"VEREADOR JOSÉ AILTON DO NASCIMENTO",total:33,funcoes:{"AUX DE EDUCAÇÃO":19,"ASG":6,"MERENDEIRA(O)":3,"PORTEIRO":2,"ANALISTA ADM":1,"LAVADEIRA":1,"LACTARISTA":1}},
-  {tipo:"CMEI",nome:"WIRTON LIRA",total:21,funcoes:{"AUX DE EDUCAÇÃO":12,"ASG":4,"MERENDEIRA(O)":2,"PORTEIRO":2,"ANALISTA ADM":1}},
-  {tipo:"ETI",nome:"ÁLVARO LINS",total:41,funcoes:{"ASG":10,"COORDENADOR DE PÁTIO":8,"PROFISSIONAL DE APOIO":5,"MERENDEIRA(O)":5,"AUX ADM":5,"PORTEIRO":2,"ANALISTA ADM":2,"BOMBEIRO CIVIL":2,"AUX DE EDUCAÇÃO":1,"ZELADOR/MANUTENÇÃO":1}},
+  {tipo:"EM",nome:"ABÍLIO LUÍS DE TORRES",total:10,funcoes:{"PORTEIRO": 4,"ASG": 3,"ANALISTA ADM": 1,"AUX DE EDUCAÇÃO": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"EM",nome:"ADELINO ALVES DA SILVA",total:7,funcoes:{"ASG": 2,"MERENDEIRA(O)": 2,"PORTEIRO": 2,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"EM",nome:"ALFREDO PINTO VIEIRA DE MELO",total:9,funcoes:{"PORTEIRO": 5,"ASG": 2,"AUX DE EDUCAÇÃO": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"CMEI",nome:"AMÉLIA TEREZA DA CONCEIÇÃO",total:39,funcoes:{"AUX DE EDUCAÇÃO": 22,"ASG": 6,"PORTEIRO": 3,"LACTARISTA": 2,"LAVADEIRA": 2,"MERENDEIRA(O)": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"ANTONIA MARIA DA CONCEIÇÃO COSTA",total:8,funcoes:{"PORTEIRO": 3,"ASG": 2,"AUX DE EDUCAÇÃO": 1,"MERENDEIRA(O)": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"ANTÔNIO MARTINS",total:8,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 2,"ASG": 1,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"CMEI",nome:"ARTESÃO SEVERINO VITALINO",total:58,funcoes:{"AUX DE EDUCAÇÃO": 34,"PORTEIRO": 5,"ASG": 4,"MERENDEIRA(O)": 4,"LACTARISTA": 3,"LAVADEIRA": 3,"PROFISSIONAL DE APOIO": 3,"ANALISTA ADM": 1,"AUX ADM": 1}},
+  {tipo:"CMEI",nome:"ARTISTA PLÁSTICA LUISA CAVALCANTI MACIEL",total:97,funcoes:{"AUX DE EDUCAÇÃO": 58,"PROFISSIONAL DE APOIO": 15,"MERENDEIRA(O)": 6,"ASG": 5,"LACTARISTA": 4,"AUX ADM": 2,"BOMBEIRO CIVIL": 2,"LAVADEIRA": 2,"PORTEIRO": 2,"ANALISTA ADM": 1}},
+  {tipo:"EM",nome:"ASSENTAMENTO MACAMBIRA BORBA",total:6,funcoes:{"PORTEIRO": 4,"ASG": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"CMEI",nome:"BABU",total:64,funcoes:{"AUX DE EDUCAÇÃO": 38,"ASG": 5,"PROFISSIONAL DE APOIO": 5,"MERENDEIRA(O)": 4,"PORTEIRO": 4,"LACTARISTA": 3,"AUX ADM": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"LAVADEIRA": 1}},
+  {tipo:"EM",nome:"BATISTA DA SILVA",total:9,funcoes:{"ASG": 4,"PORTEIRO": 4,"MERENDEIRA(O)": 1}},
+  {tipo:"EM",nome:"BELÍSIO CÓRDULA",total:6,funcoes:{"PORTEIRO": 3,"ASG": 1,"MERENDEIRA(O)": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"CMEI",nome:"CACHOEIRA SECA",total:1,funcoes:{"ASG": 1}},
+  {tipo:"ETI",nome:"CAPITÃO JOÃO VELHO",total:24,funcoes:{"ASG": 5,"PROFISSIONAL DE APOIO": 4,"MERENDEIRA(O)": 3,"PORTEIRO": 3,"COORDENADOR DE PÁTIO": 2,"MONITOR DE TRANSPORTES": 2,"ANALISTA ADM": 1,"AUX ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"AUX DE EDUCAÇÃO": 1,"PORTEIRO DIURNO": 1}},
+  {tipo:"EM",nome:"CAPITÃO RUFINO",total:28,funcoes:{"PROFISSIONAL DE APOIO": 7,"ASG": 4,"AUX DE EDUCAÇÃO": 4,"MERENDEIRA(O)": 4,"PORTEIRO": 4,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"AUX ADM": 1,"COORDENADOR DE PÁTIO": 1,"LACTARISTA": 1}},
+  {tipo:"ETI",nome:"COLEGIO MUNICIPAL ALVARO LINS",total:13,funcoes:{"PROFISSIONAL DE APOIO": 8,"MONITOR DE TRANSPORTES": 2,"PORTEIRO NOTURNO": 1,"PORTEIRO DIURNO": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"EM",nome:"COLÉGIO MUNICIPAL  PROFESSOR  LUIZ PESSOA DA SILVA",total:10,funcoes:{"PROFISSIONAL DE APOIO": 7,"MONITOR DE TRANSPORTES": 2,"LACTARISTA": 1}},
+  {tipo:"EM",nome:"COLÉGIO MUNICIPAL PROFESSOR LUIZ PESSOA DA SILVA",total:40,funcoes:{"ASG": 9,"COORDENADOR DE PÁTIO": 6,"MERENDEIRA(O)": 5,"PORTEIRO": 5,"AUX ADM": 4,"PROFISSIONAL DE APOIO": 4,"ANALISTA ADM": 3,"BOMBEIRO CIVIL": 2,"AUX DE EDUCAÇÃO": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"COLÉGIO MUNICIPAL PROFESSOR LUIZ PESSOA DA SILVA - ANEXO",total:12,funcoes:{"ASG": 4,"MERENDEIRA(O)": 3,"COORDENADOR DE PÁTIO": 2,"PORTEIRO": 2,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"EM",nome:"COLÉGIO MUNICIPAL PROFESSORA LAURA FLORÊNCIO",total:57,funcoes:{"PROFISSIONAL DE APOIO": 12,"ASG": 11,"COORDENADOR DE PÁTIO": 8,"MERENDEIRA(O)": 7,"PORTEIRO": 6,"AUX ADM": 4,"AUX DE EDUCAÇÃO": 3,"ANALISTA ADM": 2,"BOMBEIRO CIVIL": 2,"ZELADOR/MANUTENÇÃO": 1,"INTERPRETE DE LIBRAS": 1}},
+  {tipo:"EM",nome:"COÉGIO MUNICIPAL PROFESSORA LAURA FLORÊNCIO",total:1,funcoes:{"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"EM",nome:"CÔNEGO JÚLIO CABRAL",total:8,funcoes:{"PORTEIRO": 4,"ASG": 2,"MERENDEIRA(O)": 2}},
+  {tipo:"EM",nome:"DEPUTADA CRISTINA TAVARES",total:47,funcoes:{"ASG": 10,"PROFISSIONAL DE APOIO": 9,"COORDENADOR DE PÁTIO": 7,"MERENDEIRA(O)": 5,"ANALISTA ADM": 4,"PORTEIRO": 4,"AUX ADM": 3,"BOMBEIRO CIVIL": 2,"AUX DE EDUCAÇÃO": 1,"MUSICO": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"CMEI",nome:"DOM ANTONIO SOARES COSTA",total:28,funcoes:{"AUX DE EDUCAÇÃO": 18,"ASG": 3,"PORTEIRO": 3,"LAVADEIRA": 2,"LACTARISTA": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"EM",nome:"DOM BERNARDINO MARCHIÓ",total:51,funcoes:{"PROFISSIONAL DE APOIO": 16,"AUX DE EDUCAÇÃO": 9,"ASG": 8,"COORDENADOR DE PÁTIO": 6,"AUX ADM": 4,"MERENDEIRA(O)": 4,"PORTEIRO": 2,"ANALISTA ADM": 1,"BOMBEIRO CIVIL": 1}},
+  {tipo:"EM",nome:"DOM MIGUEL SEVERINO DE LIMA",total:9,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 2,"ASG": 1,"AUX DE EDUCAÇÃO": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"CMEI",nome:"DONA LIQUINHA",total:1,funcoes:{"ASG": 1}},
+  {tipo:"CMEI",nome:"DONA LIQUINHA - MARIA JESUS DA CONCEIÇÃO",total:30,funcoes:{"AUX DE EDUCAÇÃO": 15,"PORTEIRO": 4,"ASG": 3,"MERENDEIRA(O)": 3,"ZELADOR/MANUTENÇÃO": 1,"AUX ADM": 1,"LACTARISTA": 1,"LAVADEIRA": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"EM",nome:"DONA MARIA DIGNA",total:11,funcoes:{"PORTEIRO": 4,"ASG": 2,"MERENDEIRA(O)": 2,"AUX ADM": 1,"AUX DE EDUCAÇÃO": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"ETI",nome:"DR. AMARO DE LYRA E CÉSAR",total:44,funcoes:{"COORDENADOR DE PÁTIO": 9,"PROFISSIONAL DE APOIO": 8,"ASG": 7,"MERENDEIRA(O)": 7,"ANALISTA ADM": 2,"ASSIST OPERACIONAL": 2,"BOMBEIRO CIVIL": 2,"PORTEIRO": 2,"MONITOR DE TRANSPORTES": 2,"AUX ADM": 1,"INTERPRETE DE LIBRAS": 1,"REPOGRAFIA": 1}},
+  {tipo:"EM",nome:"DR. OSCAR BARRETO",total:4,funcoes:{"ASG": 2,"AUX DE EDUCAÇÃO": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"DR. TABOSA DE ALMEIDA",total:22,funcoes:{"ASG": 5,"PROFISSIONAL DE APOIO": 5,"PORTEIRO": 4,"AUX DE EDUCAÇÃO": 2,"MERENDEIRA(O)": 2,"ANALISTA ADM": 1,"AUX ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"COORDENADOR DE PÁTIO": 1}},
+  {tipo:"EM",nome:"DUDA UMBUZEIRO",total:12,funcoes:{"PORTEIRO": 4,"ASG": 3,"MERENDEIRA(O)": 2,"ANALISTA ADM": 1,"COORDENADOR DE PÁTIO": 1,"PORTEIRO NOTURNO": 1}},
+  {tipo:"EM",nome:"DUQUE DE CAXIAS",total:52,funcoes:{"PROFISSIONAL DE APOIO": 18,"ASG": 9,"COORDENADOR DE PÁTIO": 5,"MERENDEIRA(O)": 5,"AUX DE EDUCAÇÃO": 4,"PORTEIRO": 4,"AUX ADM": 3,"ANALISTA ADM": 2,"BOMBEIRO CIVIL": 2}},
+  {tipo:"EM",nome:"ESCOLA INTERMEDIÁRIA MARIA DO SOCORRO DE FREITAS",total:18,funcoes:{"ASG": 4,"PORTEIRO": 4,"MERENDEIRA(O)": 3,"PROFISSIONAL DE APOIO": 2,"ANALISTA ADM": 1,"AUX ADM": 1,"AUX DE EDUCAÇÃO": 1,"COORDENADOR DE PÁTIO": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"ESCOLA REUNIDA CASA DO TRABALHADOR",total:38,funcoes:{"PROFISSIONAL DE APOIO": 11,"COORDENADOR DE PÁTIO": 7,"ASG": 6,"PORTEIRO": 5,"AUX ADM": 3,"MERENDEIRA(O)": 3,"AUX DE EDUCAÇÃO": 2,"ANALISTA ADM": 1}},
+  {tipo:"EM",nome:"EVANGÉLICA REVERENDO GENÉSIO CAMPOS",total:25,funcoes:{"ASG": 5,"COORDENADOR DE PÁTIO": 5,"PROFISSIONAL DE APOIO": 5,"PORTEIRO": 4,"MERENDEIRA(O)": 3,"AUX ADM": 1,"AUX DE EDUCAÇÃO": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"CMEI",nome:"FERNANDO SOARES LYRA",total:77,funcoes:{"AUX DE EDUCAÇÃO": 54,"PORTEIRO": 6,"ASG": 6,"MERENDEIRA(O)": 5,"LAVADEIRA": 3,"ANALISTA ADM": 1,"LACTARISTA": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"CMEI",nome:"FLORA BEZERRA",total:39,funcoes:{"AUX DE EDUCAÇÃO": 21,"ASG": 5,"PORTEIRO": 4,"MERENDEIRA(O)": 3,"LAVADEIRA": 2,"PROFISSIONAL DE APOIO": 2,"ANALISTA ADM": 1,"LACTARISTA": 1}},
+  {tipo:"EM",nome:"FORTUNATO RIBEIRO DA SILVA",total:8,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 2,"ASG": 1,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"EM",nome:"FRANCELINO GUILHERME DE AZEVEDO",total:12,funcoes:{"PORTEIRO": 4,"ASG": 2,"MERENDEIRA(O)": 2,"PROFISSIONAL DE APOIO": 2,"AUX ADM": 1,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"EM",nome:"FRANCISCA MARIA DA CONCEIÇÃO",total:9,funcoes:{"PORTEIRO": 4,"ASG": 2,"AUX DE EDUCAÇÃO": 1,"MERENDEIRA(O)": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"EM",nome:"FRANCISCO BORGES",total:17,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 3,"PROFISSIONAL DE APOIO": 3,"ASG": 2,"ANALISTA ADM": 1,"AUX ADM": 1,"COORDENADOR DE PÁTIO": 1,"ASSIST OPERACIONAL": 1,"MONITOR DE TRANSPORTES": 1}},
+  {tipo:"CMEI",nome:"GUIOMAR ALVES DE LIMA - GUIOMAR LIMA",total:66,funcoes:{"AUX DE EDUCAÇÃO": 43,"PROFISSIONAL DE APOIO": 6,"ASG": 5,"MERENDEIRA(O)": 5,"PORTEIRO": 3,"LAVADEIRA": 2,"ANALISTA ADM": 1,"AUX ADM": 1}},
+  {tipo:"CMEI",nome:"HELENA MARTINS GOMES",total:48,funcoes:{"AUX DE EDUCAÇÃO": 24,"PROFISSIONAL DE APOIO": 5,"ASG": 4,"MERENDEIRA(O)": 4,"PORTEIRO": 4,"LACTARISTA": 3,"LAVADEIRA": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"CMEI",nome:"HELENO CUMARÚ",total:29,funcoes:{"AUX DE EDUCAÇÃO": 14,"ASG": 3,"MERENDEIRA(O)": 3,"PORTEIRO": 3,"LACTARISTA": 2,"LAVADEIRA": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"ETI",nome:"IRMÃ CECILIANA GROSS",total:51,funcoes:{"PROFISSIONAL DE APOIO": 14,"COORDENADOR DE PÁTIO": 8,"ASG": 7,"MERENDEIRA(O)": 6,"PORTEIRO": 5,"AUX ADM": 3,"ANALISTA ADM": 2,"BOMBEIRO CIVIL": 2,"MONITOR DE TRANSPORTES": 2,"ARTE EDUCADOR": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"CMEI",nome:"IRMÃ ROSALIA",total:41,funcoes:{"AUX DE EDUCAÇÃO": 22,"PROFISSIONAL DE APOIO": 6,"ASG": 5,"MERENDEIRA(O)": 3,"PORTEIRO": 2,"ANALISTA ADM": 1,"AUX ADM": 1,"LAVADEIRA": 1}},
+  {tipo:"CMEI",nome:"IVANISE FLORA ARAÚJO DE MENEZES",total:48,funcoes:{"AUX DE EDUCAÇÃO": 30,"ASG": 4,"MERENDEIRA(O)": 3,"PROFISSIONAL DE APOIO": 3,"AUX ADM": 2,"LAVADEIRA": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"PORTEIRO": 1,"PORTEIRO NOTURNO": 1}},
+  {tipo:"CMEI",nome:"IVANISE FLORA ARAÚJO DE MENEZES - ANEXO",total:20,funcoes:{"AUX DE EDUCAÇÃO": 9,"PORTEIRO": 3,"PROFISSIONAL DE APOIO": 3,"ASG": 2,"MERENDEIRA(O)": 2,"LAVADEIRA": 1}},
+  {tipo:"EM",nome:"JOAQUIM NABUCO",total:11,funcoes:{"PORTEIRO": 4,"ASG": 2,"MERENDEIRA(O)": 2,"AUX DE EDUCAÇÃO": 1,"PROFISSIONAL DE APOIO": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"JOEL PONTES",total:29,funcoes:{"PROFISSIONAL DE APOIO": 9,"ASG": 4,"MERENDEIRA(O)": 4,"COORDENADOR DE PÁTIO": 3,"PORTEIRO": 3,"AUX ADM": 2,"AUX DE EDUCAÇÃO": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"JOSEFA MARIA DA CONCEIÇÃO DANDON",total:7,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 2,"ASG": 1}},
+  {tipo:"EM",nome:"JOSÉ BARBOSA",total:6,funcoes:{"PORTEIRO": 4,"ASG": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"EM",nome:"JOSÉ CLEMENTE DE SOUZA",total:26,funcoes:{"PROFISSIONAL DE APOIO": 6,"ASG": 5,"MERENDEIRA(O)": 5,"PORTEIRO": 4,"AUX ADM": 2,"AUX DE EDUCAÇÃO": 2,"ANALISTA ADM": 1,"COORDENADOR DE PÁTIO": 1}},
+  {tipo:"EM",nome:"JOSÉ FAUSTINO VILA NOVA",total:8,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 2,"ASG": 1,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"EM",nome:"JOSÉ MANOEL DA SILVEIRA",total:11,funcoes:{"PORTEIRO": 4,"ASG": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"AUX DE EDUCAÇÃO": 1,"MERENDEIRA(O)": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"EM",nome:"JOSÉ PINHEIRO DOS SANTOS FILHO",total:33,funcoes:{"AUX DE EDUCAÇÃO": 21,"MERENDEIRA(O)": 3,"PORTEIRO": 3,"ASG": 2,"ANALISTA ADM": 1,"LAVADEIRA": 1,"PROFISSIONAL DE APOIO": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"JOSÉ RAIMUNDO PAES DE LIRA",total:6,funcoes:{"PORTEIRO": 4,"ASG": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"EM",nome:"JOSÉ RAIMUNDO SOBRINHO",total:9,funcoes:{"PORTEIRO": 4,"ASG": 2,"MERENDEIRA(O)": 2,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"EM",nome:"JOSÉ SEVERINO DE AMORIM",total:7,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 2,"ASG": 1}},
+  {tipo:"EM",nome:"JOÃO CURSINO",total:3,funcoes:{"ASG": 1,"MERENDEIRA(O)": 1,"PORTEIRO": 1}},
+  {tipo:"EM",nome:"JOÃO DEMÓCRITO FLORÊNCIO",total:6,funcoes:{"PORTEIRO": 4,"ASG": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"EM",nome:"JOÃO LUIZ TORRES",total:15,funcoes:{"PORTEIRO": 4,"ASG": 3,"AUX DE EDUCAÇÃO": 2,"MERENDEIRA(O)": 2,"PROFISSIONAL DE APOIO": 2,"COORDENADOR DE PÁTIO": 1,"AUX ADM": 1}},
+  {tipo:"EM",nome:"JOÃO PATRÍCIO DE CARVALHO",total:5,funcoes:{"PORTEIRO": 3,"ASG": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"EM",nome:"JOÃO VÊNIO DA SILVA",total:7,funcoes:{"PORTEIRO": 3,"ASG": 1,"MERENDEIRA(O)": 1,"ZELADOR/MANUTENÇÃO": 1,"PORTEIRO NOTURNO": 1}},
+  {tipo:"EM",nome:"JOÃO XXIII",total:9,funcoes:{"PORTEIRO": 5,"ASG": 2,"MERENDEIRA(O)": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"CMEI",nome:"JUSTINA FREITAS",total:44,funcoes:{"AUX DE EDUCAÇÃO": 21,"PROFISSIONAL DE APOIO": 5,"ASG": 4,"PORTEIRO": 4,"LACTARISTA": 3,"LAVADEIRA": 3,"MERENDEIRA(O)": 3,"ANALISTA ADM": 1}},
+  {tipo:"EM",nome:"LANDELINO ROCHA",total:34,funcoes:{"ASG": 9,"PROFISSIONAL DE APOIO": 9,"MERENDEIRA(O)": 5,"PORTEIRO": 4,"COORDENADOR DE PÁTIO": 3,"AUX ADM": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"LEONOR FELICIDADE DA CONCEIÇÃO",total:7,funcoes:{"PORTEIRO": 4,"ASG": 1,"AUX DE EDUCAÇÃO": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"CMEI",nome:"LEOPOLDINA QUEIROZ DE LIMA",total:38,funcoes:{"AUX DE EDUCAÇÃO": 16,"ASG": 4,"LACTARISTA": 4,"PORTEIRO": 4,"PROFISSIONAL DE APOIO": 4,"MERENDEIRA(O)": 3,"LAVADEIRA": 2,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"LIONS CLUB",total:52,funcoes:{"PROFISSIONAL DE APOIO": 11,"AUX DE EDUCAÇÃO": 9,"ASG": 7,"COORDENADOR DE PÁTIO": 6,"MERENDEIRA(O)": 6,"PORTEIRO": 5,"AUX ADM": 4,"BOMBEIRO CIVIL": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"LIONS CLUB - ANEXO",total:9,funcoes:{"PORTEIRO": 3,"ASG": 2,"COORDENADOR DE PÁTIO": 2,"PROFISSIONAL DE APOIO": 2}},
+  {tipo:"EM",nome:"MAJOR SINVAL",total:16,funcoes:{"ASG": 4,"PORTEIRO": 3,"AUX DE EDUCAÇÃO": 2,"MERENDEIRA(O)": 2,"PROFISSIONAL DE APOIO": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"COORDENADOR DE PÁTIO": 1}},
+  {tipo:"EM",nome:"MANOEL BANDEIRA",total:9,funcoes:{"PORTEIRO": 5,"MERENDEIRA(O)": 2,"ASG": 1,"COORDENADOR DE PÁTIO": 1}},
+  {tipo:"EM",nome:"MANOEL FÉLIX DE ALMEIDA",total:12,funcoes:{"PORTEIRO": 4,"ASG": 2,"MERENDEIRA(O)": 2,"ANALISTA ADM": 1,"AUX DE EDUCAÇÃO": 1,"COORDENADOR DE PÁTIO": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"MANOEL HENRIQUE DA SILVA",total:6,funcoes:{"PORTEIRO": 3,"ASG": 1,"MERENDEIRA(O)": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"EM",nome:"MANOEL LIMEIRA",total:22,funcoes:{"ASG": 7,"PORTEIRO": 4,"MERENDEIRA(O)": 3,"AUX DE EDUCAÇÃO": 2,"COORDENADOR DE PÁTIO": 2,"PROFISSIONAL DE APOIO": 2,"ANALISTA ADM": 1,"AUX ADM": 1}},
+  {tipo:"EM",nome:"MANOEL LIMEIRA - ANEXO",total:4,funcoes:{"AUX DE EDUCAÇÃO": 3,"PORTEIRO": 1}},
+  {tipo:"EM",nome:"MANOEL TRAJANO DE ARRUDA",total:8,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 2,"ASG": 1,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"EM",nome:"MANOEL VALDEVINO DA SILVA",total:10,funcoes:{"PORTEIRO": 3,"ANALISTA ADM": 2,"MERENDEIRA(O)": 2,"ASG": 1,"AUX DE EDUCAÇÃO": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"MARCIONILO SOARES",total:7,funcoes:{"PORTEIRO": 4,"ASG": 1,"MERENDEIRA(O)": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"CMEI",nome:"MARIA ALEIR RIBEIRO GALVÃO",total:61,funcoes:{"AUX DE EDUCAÇÃO": 32,"PROFISSIONAL DE APOIO": 12,"ASG": 3,"LAVADEIRA": 3,"PORTEIRO": 3,"MERENDEIRA(O)": 3,"ANALISTA ADM": 2,"LACTARISTA": 2,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"MARIA ALICE",total:11,funcoes:{"PORTEIRO": 3,"ASG": 2,"MERENDEIRA(O)": 2,"PROFISSIONAL DE APOIO": 2,"AUX ADM": 1,"PORTEIRO DIURNO": 1}},
+  {tipo:"EM",nome:"MARIA ANUNCIADA RODRIGUES",total:17,funcoes:{"PORTEIRO": 5,"ASG": 3,"MERENDEIRA(O)": 3,"AUX DE EDUCAÇÃO": 2,"ANALISTA ADM": 1,"PROFISSIONAL DE APOIO": 1,"ASSIST OPERACIONAL": 1,"MONITOR DE TRANSPORTES": 1}},
+  {tipo:"EM",nome:"MARIA DE LOURDES PEPEU",total:14,funcoes:{"ASG": 3,"MERENDEIRA(O)": 3,"PORTEIRO": 3,"PROFISSIONAL DE APOIO": 2,"ANALISTA ADM": 1,"COORDENADOR DE PÁTIO": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"MARIA FÉLIX DE LIMA",total:29,funcoes:{"ASG": 7,"MERENDEIRA(O)": 5,"PORTEIRO": 4,"AUX DE EDUCAÇÃO": 3,"COORDENADOR DE PÁTIO": 3,"PROFISSIONAL DE APOIO": 3,"AUX ADM": 2,"ANALISTA ADM": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"MARIA JOSÉ DE FRANÇA",total:8,funcoes:{"PORTEIRO": 4,"ASG": 2,"AUX DE EDUCAÇÃO": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"EM",nome:"MARIA MARTINS DE MELO",total:6,funcoes:{"PORTEIRO": 3,"ANALISTA ADM": 1,"ASG": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"EM",nome:"MESTRE VITALINO",total:30,funcoes:{"ASG": 9,"PORTEIRO": 5,"MERENDEIRA(O)": 5,"AUX ADM": 3,"COORDENADOR DE PÁTIO": 3,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"AUX DE EDUCAÇÃO": 1,"INTERPRETE DE LIBRAS": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"CMEI",nome:"MÁRCIA MARIA TEIXEIRA LYRA",total:51,funcoes:{"AUX DE EDUCAÇÃO": 29,"ASG": 6,"MERENDEIRA(O)": 5,"PROFISSIONAL DE APOIO": 5,"LAVADEIRA": 2,"AUX ADM": 1,"LACTARISTA": 1,"ZELADOR/MANUTENÇÃO": 1,"PORTEIRO": 1}},
+  {tipo:"CEI",nome:"MÉRCIA MOURA PINHEIRO",total:40,funcoes:{"AUX DE EDUCAÇÃO": 24,"ASG": 4,"MERENDEIRA(O)": 3,"PORTEIRO": 2,"PROFISSIONAL DE APOIO": 2,"BOMBEIRO CIVIL": 2,"LAVADEIRA": 1,"ANALISTA ADM": 1,"LACTARISTA": 1}},
+  {tipo:"EM",nome:"NATALICE LIMEIRA",total:12,funcoes:{"PORTEIRO": 4,"AUX ADM": 2,"MERENDEIRA(O)": 2,"ANALISTA ADM": 1,"ASG": 1,"AUX DE EDUCAÇÃO": 1,"PORTEIRO FERISTA": 1}},
+  {tipo:"EM",nome:"NOSSA SENHORA DAS DORES",total:10,funcoes:{"PORTEIRO": 4,"ASG": 2,"MERENDEIRA(O)": 2,"AUX DE EDUCAÇÃO": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"EM",nome:"NOSSA SENHORA DE APARECIDA",total:9,funcoes:{"PORTEIRO": 3,"MERENDEIRA(O)": 2,"ASG": 1,"AUX ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"EM",nome:"NOSSA SENHORA DE FÁTIMA",total:64,funcoes:{"PROFISSIONAL DE APOIO": 13,"ASG": 12,"COORDENADOR DE PÁTIO": 9,"MERENDEIRA(O)": 6,"MONITOR DE TRANSPORTES": 6,"AUX DE EDUCAÇÃO": 4,"PORTEIRO": 4,"AUX ADM": 3,"ANALISTA ADM": 2,"ARTE EDUCADOR": 1,"BOMBEIRO CIVIL": 1,"INTERPRETE DE LIBRAS": 1,"ZELADOR/MANUTENÇÃO": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"PADRE ANTONIO FAUSTINO",total:7,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 2,"ASG": 1}},
+  {tipo:"EM",nome:"PADRE PEDRO BATISTA DE AGUIAR",total:39,funcoes:{"PROFISSIONAL DE APOIO": 12,"ASG": 7,"MERENDEIRA(O)": 5,"COORDENADOR DE PÁTIO": 4,"PORTEIRO": 4,"AUX ADM": 2,"BOMBEIRO CIVIL": 2,"ANALISTA ADM": 1,"AUX DE EDUCAÇÃO": 1,"PORTEIRO NOTURNO": 1}},
+  {tipo:"EM",nome:"PAULINA MONTEIRO",total:39,funcoes:{"AUX DE EDUCAÇÃO": 10,"ASG": 7,"MERENDEIRA(O)": 5,"PORTEIRO": 5,"PROFISSIONAL DE APOIO": 4,"COORDENADOR DE PÁTIO": 3,"AUX ADM": 2,"ANALISTA ADM": 1,"ASSIST OPERACIONAL": 1,"MONITOR DE TRANSPORTES": 1}},
+  {tipo:"EM",nome:"PEDRO DE ANDRADE",total:9,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 2,"ASG": 1,"COORDENADOR DE PÁTIO": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"PEDRO DE SOUZA",total:37,funcoes:{"PROFISSIONAL DE APOIO": 7,"ASG": 6,"AUX DE EDUCAÇÃO": 5,"AUX ADM": 4,"COORDENADOR DE PÁTIO": 4,"MERENDEIRA(O)": 4,"PORTEIRO": 4,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"MONITOR DE TRANSPORTES": 1}},
+  {tipo:"ETI",nome:"POETA LÍDIO CAVALCANTI",total:38,funcoes:{"PROFISSIONAL DE APOIO": 10,"ASG": 6,"MERENDEIRA(O)": 6,"COORDENADOR DE PÁTIO": 5,"PORTEIRO": 5,"ANALISTA ADM": 2,"BOMBEIRO CIVIL": 2,"AUX ADM": 1,"INTERPRETE DE LIBRAS": 1}},
+  {tipo:"EM",nome:"PREFEITO ANASTÁCIO RODRIGUES DA SILVA",total:63,funcoes:{"AUX DE EDUCAÇÃO": 36,"ASG": 6,"MERENDEIRA(O)": 5,"PORTEIRO": 4,"LACTARISTA": 3,"PROFISSIONAL DE APOIO": 3,"LAVADEIRA": 2,"ZELADOR/MANUTENÇÃO": 1,"AUX ADM": 1,"ANALISTA ADM": 1,"MONITOR DE TRANSPORTES": 1}},
+  {tipo:"ETI",nome:"PREFEITO JOÃO LYRA FILHO",total:32,funcoes:{"ASG": 6,"COORDENADOR DE PÁTIO": 6,"MERENDEIRA(O)": 6,"PROFISSIONAL DE APOIO": 6,"AUX ADM": 2,"BOMBEIRO CIVIL": 2,"PORTEIRO": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"PRESIDENTE KENNEDY",total:40,funcoes:{"ASG": 10,"PROFISSIONAL DE APOIO": 6,"COORDENADOR DE PÁTIO": 5,"MERENDEIRA(O)": 5,"AUX DE EDUCAÇÃO": 4,"PORTEIRO": 4,"AUX ADM": 2,"ANALISTA ADM": 1,"LACTARISTA": 1,"ASSIST OPERACIONAL": 1,"MOTORISTA": 1}},
+  {tipo:"ETI",nome:"PROFESSOR ALTAIR NUNES PORTO FILHO",total:48,funcoes:{"PROFISSIONAL DE APOIO": 11,"ASG": 9,"MERENDEIRA(O)": 8,"COORDENADOR DE PÁTIO": 7,"PORTEIRO": 5,"AUX ADM": 3,"ANALISTA ADM": 2,"BOMBEIRO CIVIL": 1,"ASSIST OPERACIONAL": 1,"MONITOR DE TRANSPORTES": 1}},
+  {tipo:"EM",nome:"PROFESSOR AMARO MATIAS SILVA",total:35,funcoes:{"PROFISSIONAL DE APOIO": 9,"AUX DE EDUCAÇÃO": 5,"COORDENADOR DE PÁTIO": 5,"PORTEIRO": 5,"MERENDEIRA(O)": 4,"ASG": 3,"AUX ADM": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"PROFESSOR AMARO MATIAS SILVA - ANEXO",total:10,funcoes:{"ASG": 4,"PORTEIRO": 3,"MERENDEIRA(O)": 2,"COORDENADOR DE PÁTIO": 1}},
+  {tipo:"EM",nome:"PROFESSOR AUGUSTO TABOSA",total:32,funcoes:{"ASG": 6,"AUX DE EDUCAÇÃO": 6,"PORTEIRO": 6,"MERENDEIRA(O)": 5,"PROFISSIONAL DE APOIO": 4,"COORDENADOR DE PÁTIO": 2,"ANALISTA ADM": 1,"AUX ADM": 1,"INTERPRETE DE LIBRAS": 1}},
+  {tipo:"EM",nome:"PROFESSOR AUGUSTO TABOSA - ANEXO",total:24,funcoes:{"PROFISSIONAL DE APOIO": 10,"COORDENADOR DE PÁTIO": 5,"ASG": 4,"PORTEIRO": 3,"AUX ADM": 2}},
+  {tipo:"CMEI",nome:"PROFESSOR CARLOS ANTONIO AMARAL DE ALMEIDA",total:66,funcoes:{"AUX DE EDUCAÇÃO": 40,"PROFISSIONAL DE APOIO": 7,"ASG": 5,"MERENDEIRA(O)": 5,"LACTARISTA": 3,"LAVADEIRA": 3,"PORTEIRO": 2,"AUX ADM": 1}},
+  {tipo:"CMEI",nome:"PROFESSOR HONÓRIO INÁCIO DA SILVA FILHO",total:31,funcoes:{"AUX DE EDUCAÇÃO": 15,"PORTEIRO": 4,"ASG": 3,"LACTARISTA": 2,"PROFISSIONAL DE APOIO": 2,"ZELADOR/MANUTENÇÃO": 1,"AUX ADM": 1,"LAVADEIRA": 1,"MERENDEIRA(O)": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"PROFESSOR JOSÉ FLORÊNCIO LEÃO",total:25,funcoes:{"ASG": 5,"PROFISSIONAL DE APOIO": 5,"COORDENADOR DE PÁTIO": 4,"MERENDEIRA(O)": 3,"PORTEIRO": 3,"AUX ADM": 2,"AUX DE EDUCAÇÃO": 2,"ANALISTA ADM": 1}},
+  {tipo:"EM",nome:"PROFESSOR JOSÉ FLORÊNCIO NETO (PROFESSOR MACHADINHO)",total:78,funcoes:{"PROFISSIONAL DE APOIO": 20,"ASG": 13,"AUX DE EDUCAÇÃO": 9,"COORDENADOR DE PÁTIO": 8,"PORTEIRO": 6,"MERENDEIRA(O)": 6,"MONITOR DE TRANSPORTES": 5,"AUX ADM": 4,"ANALISTA ADM": 3,"BOMBEIRO CIVIL": 2,"ASSIST OPERACIONAL": 1,"PORTEIRO DIURNO": 1}},
+  {tipo:"EM",nome:"PROFESSOR JOSÉ LAURENTINO SANTOS",total:55,funcoes:{"PROFISSIONAL DE APOIO": 12,"COORDENADOR DE PÁTIO": 9,"ASG": 8,"MERENDEIRA(O)": 7,"AUX ADM": 6,"PORTEIRO": 5,"AUX DE EDUCAÇÃO": 3,"ANALISTA ADM": 2,"BOMBEIRO CIVIL": 2,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"PROFESSOR KERMÓGENES DIAS DE ARAÚJO",total:56,funcoes:{"PROFISSIONAL DE APOIO": 18,"ASG": 10,"COORDENADOR DE PÁTIO": 7,"AUX ADM": 5,"MERENDEIRA(O)": 5,"PORTEIRO": 4,"ANALISTA ADM": 2,"AUX DE EDUCAÇÃO": 2,"ARTE EDUCADOR": 1,"ZELADOR/MANUTENÇÃO": 1,"MONITOR DE TRANSPORTES": 1}},
+  {tipo:"EM",nome:"PROFESSOR LEUDO VALENÇA",total:87,funcoes:{"PROFISSIONAL DE APOIO": 30,"ASG": 13,"COORDENADOR DE PÁTIO": 11,"PORTEIRO": 9,"MERENDEIRA(O)": 8,"AUX ADM": 6,"AUX DE EDUCAÇÃO": 5,"BOMBEIRO CIVIL": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"OPERADOR DE REPOGRAFIA": 1}},
+  {tipo:"ETI",nome:"PROFESSOR RUBEM DE LIMA BARROS",total:46,funcoes:{"COORDENADOR DE PÁTIO": 9,"PROFISSIONAL DE APOIO": 9,"MERENDEIRA(O)": 8,"ASG": 6,"PORTEIRO": 5,"AUX ADM": 3,"BOMBEIRO CIVIL": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"AUX DE EDUCAÇÃO": 1,"MONITOR DE TRANSPORTES": 1}},
+  {tipo:"EM",nome:"PROFESSORA CACILDA SANTOS",total:9,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 2,"ASG": 1,"COORDENADOR DE PÁTIO": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"PROFESSORA CESARINA MOURA VIEIRA COSTA",total:25,funcoes:{"ASG": 7,"PROFISSIONAL DE APOIO": 5,"MERENDEIRA(O)": 4,"PORTEIRO": 3,"AUX ADM": 2,"COORDENADOR DE PÁTIO": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"PROFESSORA EUNICE TABOSA",total:9,funcoes:{"PORTEIRO": 4,"ASG": 2,"MERENDEIRA(O)": 2,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"ETI",nome:"PROFESSORA GIANETE SILVA",total:33,funcoes:{"COORDENADOR DE PÁTIO": 6,"PROFISSIONAL DE APOIO": 6,"ASG": 5,"MERENDEIRA(O)": 5,"PORTEIRO": 5,"AUX ADM": 2,"BOMBEIRO CIVIL": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"PROFESSORA GUIOMAR LYRA",total:16,funcoes:{"ASG": 5,"PORTEIRO": 4,"PROFISSIONAL DE APOIO": 3,"ANALISTA ADM": 1,"COORDENADOR DE PÁTIO": 1,"INTERPRETE DE LIBRAS": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"EM",nome:"PROFESSORA IVA DO CARMO SILVA",total:21,funcoes:{"ASG": 4,"AUX DE EDUCAÇÃO": 4,"PORTEIRO": 4,"MERENDEIRA(O)": 4,"ANALISTA ADM": 1,"COORDENADOR DE PÁTIO": 1,"ZELADOR/MANUTENÇÃO": 1,"PROFISSIONAL DE APOIO": 1,"AUX ADM": 1}},
+  {tipo:"EM",nome:"PROFESSORA IVA DO CARMO SILVA - ANEXO",total:4,funcoes:{"PORTEIRO": 3,"ASG": 1}},
+  {tipo:"EM",nome:"PROFESSORA JEANE CAMARGO",total:23,funcoes:{"COORDENADOR DE PÁTIO": 5,"ASG": 4,"PORTEIRO": 4,"MERENDEIRA(O)": 3,"PROFISSIONAL DE APOIO": 3,"AUX ADM": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"PROFESSORA JOSÉLIA FLORÊNCIO DA SILVEIRA",total:69,funcoes:{"PROFISSIONAL DE APOIO": 23,"ASG": 11,"COORDENADOR DE PÁTIO": 10,"MERENDEIRA(O)": 7,"AUX DE EDUCAÇÃO": 5,"PORTEIRO": 4,"AUX ADM": 3,"ANALISTA ADM": 2,"BOMBEIRO CIVIL": 2,"ZELADOR/MANUTENÇÃO": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"CMEI",nome:"PROFESSORA LINDOMAR PINHEIRO",total:49,funcoes:{"AUX DE EDUCAÇÃO": 28,"PORTEIRO": 5,"PROFISSIONAL DE APOIO": 4,"ASG": 3,"LAVADEIRA": 3,"MERENDEIRA(O)": 3,"ANALISTA ADM": 1,"LACTARISTA": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"PROFESSORA MARGARIDA MARIA DE FARIAS BARROS MIRANDA",total:43,funcoes:{"PROFISSIONAL DE APOIO": 9,"ASG": 8,"COORDENADOR DE PÁTIO": 6,"MERENDEIRA(O)": 5,"AUX ADM": 4,"AUX DE EDUCAÇÃO": 3,"PORTEIRO": 3,"ANALISTA ADM": 2,"BOMBEIRO CIVIL": 2,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"PROFESSORA MARIA BEZERRA TORRES",total:26,funcoes:{"PORTEIRO": 6,"PROFISSIONAL DE APOIO": 6,"COORDENADOR DE PÁTIO": 3,"MERENDEIRA(O)": 3,"ASG": 2,"AUX DE EDUCAÇÃO": 2,"ANALISTA ADM": 1,"AUX ADM": 1,"ASSIST OPERACIONAL": 1,"MONITOR DE TRANSPORTES": 1}},
+  {tipo:"EM",nome:"PROFESSORA MARIA BEZERRA TORRES - ANEXO",total:7,funcoes:{"PORTEIRO": 3,"ASG": 2,"COORDENADOR DE PÁTIO": 1,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"EM",nome:"PROFESSORA MARIA CÂNDIDA",total:7,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 2,"ASG": 1}},
+  {tipo:"EM",nome:"PROFESSORA MARIA DE LOURDES AZEVEDO LIRA",total:3,funcoes:{"PORTEIRO": 2,"MERENDEIRA(O)": 1}},
+  {tipo:"CMEI",nome:"PROFESSORA MARIA DE LOURDES NASCIMENTO PONTES - TIA LOURDINHA",total:70,funcoes:{"AUX DE EDUCAÇÃO": 44,"ASG": 5,"PORTEIRO": 5,"MERENDEIRA(O)": 5,"PROFISSIONAL DE APOIO": 4,"LAVADEIRA": 3,"LACTARISTA": 2,"AUX ADM": 1,"ANALISTA ADM": 1}},
+  {tipo:"CMEI",nome:"PROFESSORA MARIA DO CARMO QUEIROZ CABRAL",total:47,funcoes:{"AUX DE EDUCAÇÃO": 27,"PORTEIRO": 5,"ASG": 3,"MERENDEIRA(O)": 3,"LACTARISTA": 2,"LAVADEIRA": 2,"PROFISSIONAL DE APOIO": 2,"AUX ADM": 1,"PORTEIRO FERISTA": 1,"PORTEIRO DIURNO": 1}},
+  {tipo:"EM",nome:"PROFESSORA MARIA EMÍLIA",total:12,funcoes:{"PORTEIRO": 3,"ASG": 2,"AUX DE EDUCAÇÃO": 2,"COORDENADOR DE PÁTIO": 1,"MERENDEIRA(O)": 1,"PROFISSIONAL DE APOIO": 1,"PORTEIRO FERISTA": 1,"PORTEIRO NOTURNO": 1}},
+  {tipo:"EM",nome:"PROFESSORA MARIANA DE LOURDES LIMA",total:48,funcoes:{"ASG": 11,"MERENDEIRA(O)": 7,"PROFISSIONAL DE APOIO": 7,"AUX DE EDUCAÇÃO": 6,"COORDENADOR DE PÁTIO": 4,"PORTEIRO": 4,"AUX ADM": 3,"ANALISTA ADM": 2,"BOMBEIRO CIVIL": 2,"ZELADOR/MANUTENÇÃO": 1,"INTERPRETE DE LIBRAS": 1}},
+  {tipo:"EM",nome:"PROFESSORA NERINE FRANCISCA DE CARVALHO",total:37,funcoes:{"AUX DE EDUCAÇÃO": 19,"ASG": 6,"MERENDEIRA(O)": 4,"PORTEIRO": 4,"PROFISSIONAL DE APOIO": 2,"LAVADEIRA": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"PROFESSORA SINHAZINHA",total:48,funcoes:{"PROFISSIONAL DE APOIO": 14,"MERENDEIRA(O)": 7,"ASG": 6,"COORDENADOR DE PÁTIO": 6,"PORTEIRO": 4,"ANALISTA ADM": 3,"AUX ADM": 3,"BOMBEIRO CIVIL": 2,"AUX DE EDUCAÇÃO": 1,"PORTEIRO FERISTA": 1,"PORTEIRO DIURNO": 1}},
+  {tipo:"EM",nome:"PROFESSORA SINHAZINHA - ANEXO 1 e 2",total:2,funcoes:{"PROFISSIONAL DE APOIO": 2}},
+  {tipo:"EM",nome:"PROFESSORA SINHAZINHA - ANEXO 2",total:18,funcoes:{"ASG": 4,"AUX DE EDUCAÇÃO": 4,"PORTEIRO": 3,"PROFISSIONAL DE APOIO": 3,"MERENDEIRA(O)": 2,"COORDENADOR DE PÁTIO": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"PROFESSORA TERESA NEUMA PEREIRA PEDROSA",total:42,funcoes:{"PROFISSIONAL DE APOIO": 10,"ASG": 9,"COORDENADOR DE PÁTIO": 5,"MERENDEIRA(O)": 5,"AUX ADM": 4,"PORTEIRO": 4,"AUX DE EDUCAÇÃO": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"PORTEIRO DIURNO": 1}},
+  {tipo:"CMEI",nome:"RAFAEL",total:1,funcoes:{"ASG": 1}},
+  {tipo:"CMEI",nome:"RENDEIRAS",total:1,funcoes:{"ASG": 1}},
+  {tipo:"ETI",nome:"REUNIDAS DUQUE DE CAXIAS",total:47,funcoes:{"ASG": 7,"MERENDEIRA(O)": 7,"PROFISSIONAL DE APOIO": 7,"COORDENADOR DE PÁTIO": 6,"INTERPRETE DE LIBRAS": 5,"PORTEIRO": 5,"MONITOR DE TRANSPORTES": 3,"AUX ADM": 2,"AUX DE EDUCAÇÃO": 2,"BOMBEIRO CIVIL": 2,"ANALISTA ADM": 1}},
+  {tipo:"EM",nome:"SABINO JOSÉ PEREIRA DA SILVA",total:6,funcoes:{"PORTEIRO": 2,"ASG": 1,"AUX DE EDUCAÇÃO": 1,"MERENDEIRA(O)": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"EM",nome:"SANTA INÊS",total:11,funcoes:{"ASG": 3,"MERENDEIRA(O)": 3,"PORTEIRO": 3,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"EM",nome:"SANTA REGINA",total:8,funcoes:{"PORTEIRO": 4,"ASG": 1,"MERENDEIRA(O)": 1,"PROFISSIONAL DE APOIO": 1,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"EM",nome:"SANTOS ANJOS",total:73,funcoes:{"PROFISSIONAL DE APOIO": 17,"ASG": 15,"COORDENADOR DE PÁTIO": 13,"PORTEIRO": 7,"AUX ADM": 6,"MERENDEIRA(O)": 6,"ANALISTA ADM": 2,"BOMBEIRO CIVIL": 2,"ZELADOR/MANUTENÇÃO": 1,"AUX DE EDUCAÇÃO": 1,"INTERPRETE DE LIBRAS": 1,"PORTEIRO FERISTA": 1,"PORTEIRO DIURNO": 1}},
+  {tipo:"EM",nome:"SEDUC - BUSCA ATIVA/ORGANIZAÇÃO ESCOLAR",total:1,funcoes:{"ANALISTA ADM": 1}},
+  {tipo:"CMEI",nome:"SEVERINA MARIA DO CARMO - DONA BIU",total:58,funcoes:{"AUX DE EDUCAÇÃO": 37,"ASG": 4,"MERENDEIRA(O)": 4,"AUX ADM": 2,"LAVADEIRA": 2,"LACTARISTA": 2,"PORTEIRO": 2,"PROFISSIONAL DE APOIO": 2,"ANALISTA ADM": 1,"BOMBEIRO CIVIL": 1,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"CMEI",nome:"SEVERINO JOSÉ DE OLIVEIRA",total:82,funcoes:{"AUX DE EDUCAÇÃO": 52,"PROFISSIONAL DE APOIO": 9,"ASG": 5,"MERENDEIRA(O)": 5,"LACTARISTA": 3,"LAVADEIRA": 3,"AUX ADM": 2,"PORTEIRO": 2,"ANALISTA ADM": 1}},
+  {tipo:"CMEI",nome:"SEVERINO OLIVEIRA DA SILVA - PROFESSOR BIU OLIVEIRA",total:42,funcoes:{"AUX DE EDUCAÇÃO": 21,"ASG": 4,"MERENDEIRA(O)": 4,"PORTEIRO": 3,"PROFISSIONAL DE APOIO": 3,"LACTARISTA": 2,"LAVADEIRA": 2,"ANALISTA ADM": 1,"ZELADOR/MANUTENÇÃO": 1,"PORTEIRO FERISTA": 1}},
+  {tipo:"EM",nome:"SÃO JOSÉ",total:10,funcoes:{"PORTEIRO": 4,"ASG": 2,"MERENDEIRA(O)": 2,"PROFISSIONAL DE APOIO": 2}},
+  {tipo:"CMEI",nome:"SÃO JOÃO DA ESCÓCIA",total:1,funcoes:{"ASG": 1}},
+  {tipo:"EM",nome:"SÃO JUDAS TADEU",total:8,funcoes:{"PORTEIRO": 4,"ASG": 2,"MERENDEIRA(O)": 2}},
+  {tipo:"EM",nome:"SÃO LUIZ GONZAGA",total:10,funcoes:{"PORTEIRO": 4,"MERENDEIRA(O)": 2,"AUX DE EDUCAÇÃO": 1,"ZELADOR/MANUTENÇÃO": 1,"ASG": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"EM",nome:"SÃO SEVERINO",total:8,funcoes:{"PORTEIRO": 3,"ASG": 2,"MERENDEIRA(O)": 2,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"EM",nome:"SÃO VICENTE DE PAULA",total:8,funcoes:{"PORTEIRO": 4,"ASG": 2,"MERENDEIRA(O)": 2}},
+  {tipo:"CMEI",nome:"SÍTIO CIPÓ",total:1,funcoes:{"ASG": 1}},
+  {tipo:"CMEI",nome:"TIA CARMINHA",total:35,funcoes:{"AUX DE EDUCAÇÃO": 19,"ASG": 4,"PROFISSIONAL DE APOIO": 3,"LAVADEIRA": 2,"MERENDEIRA(O)": 2,"PORTEIRO": 2,"ANALISTA ADM": 1,"LACTARISTA": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"CMEI",nome:"TIA CLARICE",total:47,funcoes:{"AUX DE EDUCAÇÃO": 27,"ASG": 5,"PROFISSIONAL DE APOIO": 4,"MERENDEIRA(O)": 3,"PORTEIRO": 3,"LACTARISTA": 2,"LAVADEIRA": 2,"ZELADOR/MANUTENÇÃO": 1}},
+  {tipo:"CMEI",nome:"TIA MALUDE",total:32,funcoes:{"AUX DE EDUCAÇÃO": 16,"ASG": 4,"PORTEIRO": 4,"MERENDEIRA(O)": 3,"LAVADEIRA": 2,"ASSIST OPERACIONAL": 1,"PROFISSIONAL DE APOIO": 1,"LACTARISTA": 1}},
+  {tipo:"EM",nome:"TOMÉ CLAUDINO TORRES",total:13,funcoes:{"PORTEIRO": 3,"ASG": 2,"MERENDEIRA(O)": 2,"ANALISTA ADM": 1,"AUX ADM": 1,"AUX DE EDUCAÇÃO": 1,"COORDENADOR DE PÁTIO": 1,"ZELADOR/MANUTENÇÃO": 1,"PROFISSIONAL DE APOIO": 1}},
+  {tipo:"EM",nome:"TÍPICA RURAL",total:14,funcoes:{"PORTEIRO": 4,"ASG": 3,"COORDENADOR DE PÁTIO": 2,"MERENDEIRA(O)": 2,"PROFISSIONAL DE APOIO": 2,"ANALISTA ADM": 1}},
+  {tipo:"CMEI",nome:"VEREADOR JOSÉ AILTON DO NASCIMENTO",total:38,funcoes:{"AUX DE EDUCAÇÃO": 18,"ASG": 4,"MERENDEIRA(O)": 4,"PORTEIRO": 4,"LAVADEIRA": 3,"PROFISSIONAL DE APOIO": 3,"ANALISTA ADM": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"VICENTE CORREIA",total:7,funcoes:{"PORTEIRO": 4,"ASG": 1,"AUX DE EDUCAÇÃO": 1,"MERENDEIRA(O)": 1}},
+  {tipo:"CMEI",nome:"WIRTON LIRA",total:30,funcoes:{"AUX DE EDUCAÇÃO": 13,"PORTEIRO": 5,"MERENDEIRA(O)": 4,"ASG": 3,"ANALISTA ADM": 1,"LACTARISTA": 1,"LAVADEIRA": 1,"PROFISSIONAL DE APOIO": 1,"ASSIST OPERACIONAL": 1}},
+  {tipo:"EM",nome:"XIQUE XIQUE",total:1,funcoes:{"ASG": 1}},
+  {tipo:"CMEI",nome:"ÁLVARO DO IPOJCA",total:1,funcoes:{"ASG": 1}},
+  {tipo:"ETI",nome:"ÁLVARO LINS",total:41,funcoes:{"ASG": 10,"COORDENADOR DE PÁTIO": 8,"AUX ADM": 5,"MERENDEIRA(O)": 5,"PROFISSIONAL DE APOIO": 5,"ANALISTA ADM": 2,"BOMBEIRO CIVIL": 2,"PORTEIRO": 2,"ZELADOR/MANUTENÇÃO": 1,"AUX DE EDUCAÇÃO": 1}},
+  {tipo:"CMEI",nome:"ÉRIKA PATRÍCIA",total:30,funcoes:{"AUX DE EDUCAÇÃO": 17,"ASG": 4,"MERENDEIRA(O)": 3,"LACTARISTA": 2,"ANALISTA ADM": 1,"LAVADEIRA": 1,"ZELADOR/MANUTENÇÃO": 1,"PROFISSIONAL DE APOIO": 1}}
 ]
 
 export default function RedeFisicaPage(){
@@ -379,14 +464,23 @@ export default function RedeFisicaPage(){
   const [filtroTGS,setFiltroTGS]=useState("Todos")
   const [busca,setBusca]=useState("")
   const [buscaDist,setBuscaDist]=useState("")
+  const [filtroDistTipo,setFiltroDistTipo]=useState("Todos")
   const [abaAtiva,setAbaAtiva]=useState("quadro")
   const [tgsSelecionada,setTgsSelecionada]=useState(null)
   const [escolaHover,setEscolaHover]=useState(null)
+  const [mousePos,setMousePos]=useState({x:0,y:0})
 
   useEffect(()=>{
     fetch(URL_IDEAL).then(r=>r.text())
       .then(csv=>{try{setDados(processarIdeal(parseCSV(csv)));setCarregando(false)}catch(e){console.error(e);setCarregando(false)}})
       .catch(e=>{console.error(e);setCarregando(false)})
+  },[])
+
+  // MUDANÇA 2: rastreia posição do mouse para o tooltip
+  useEffect(()=>{
+    const h=(e)=>setMousePos({x:e.clientX,y:e.clientY})
+    window.addEventListener("mousemove",h)
+    return()=>window.removeEventListener("mousemove",h)
   },[])
 
   if(carregando)return(
@@ -419,10 +513,12 @@ export default function RedeFisicaPage(){
   const alturaDefasadas=Math.max(300,todasDefasadas.length*38)
   const alturaVisivel=8*38
 
-  // Escolas filtradas na aba Distribuição
-  const escolasDistFiltradas = CONSOLIDADO_POR_ESCOLA.filter(e=>
-    buscaDist===""||e.nome.toLowerCase().includes(buscaDist.toLowerCase())||e.tipo.toLowerCase().includes(buscaDist.toLowerCase())
-  ).sort((a,b)=>a.nome.localeCompare(b.nome))
+  // MUDANÇA 3: 172 escolas + filtro por tipo
+  const escolasDistFiltradas = CONSOLIDADO_POR_ESCOLA.filter(e=>{
+    const okBusca=buscaDist===""||e.nome.toLowerCase().includes(buscaDist.toLowerCase())
+    const okTipo=filtroDistTipo==="Todos"||e.tipo===filtroDistTipo
+    return okBusca&&okTipo
+  }).sort((a,b)=>a.nome.localeCompare(b.nome))
 
   const kpis=[
     {label:"Unidades Escolares Monitoradas",valor:totalEscolas,icon:"🏫",variacao:"EM, CMEI, ETI e CEI"},
@@ -436,7 +532,6 @@ export default function RedeFisicaPage(){
       <Header titulo="Gerência Geral de Rede Física" sub="Painel de acompanhamento operacional" extra={mesAnoAtual()} cor={COR}/>
       <main style={{padding:"92px 32px 52px"}}>
 
-        {/* KPIs */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,marginBottom:24}}>
           {kpis.map(k=>(
             <div key={k.label} style={{background:"#fff",borderRadius:14,padding:"18px 20px",boxShadow:`0 2px 12px ${COR}18`,borderLeft:`4px solid ${COR}`,display:"flex",alignItems:"center",gap:14}}>
@@ -450,28 +545,25 @@ export default function RedeFisicaPage(){
           ))}
         </div>
 
-        {/* ABAS */}
         <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}>
           {[{id:"quadro",label:"📊 Quadro de Apoio"},{id:"tgs",label:"🗺️ Por Zona (TGS)"},{id:"distribuicao",label:"👥 Distribuição"},{id:"outros",label:"🔧 Outros Setores"}].map(a=>(
             <button key={a.id} onClick={()=>setAbaAtiva(a.id)} style={{padding:"8px 20px",borderRadius:10,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:abaAtiva===a.id?COR:"#fff",color:abaAtiva===a.id?"#fff":COR,boxShadow:"0 2px 8px #1a3a8f18",transition:"all 0.2s"}}>{a.label}</button>
           ))}
         </div>
 
-        {/* ════════════════ ABA: QUADRO DE APOIO ════════════════ */}
         {abaAtiva==="quadro"&&(
           <>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:24}}>
-              {/* Defasagem por cargo — filtra apenas cargos com dados */}
               <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
                 <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Defasagem por Função</div>
                 <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>Vagas faltando vs. excedentes em toda a rede</div>
                 <div style={{fontSize:11,color:COR,marginBottom:12,fontStyle:"italic"}}>💡 Passe o mouse sobre as barras para ver em quais unidades</div>
                 {(()=>{
-                  const comDados=defasagemCargo.filter(d=>d.faltando>0||d.excedente>0)
+                  // MUDANÇA 4: mostra TODOS os cargos, não só os com defasagem
                   const semDados=defasagemCargo.filter(d=>d.faltando===0&&d.excedente===0)
                   return(<>
-                    <ResponsiveContainer width="100%" height={comDados.length*42+40}>
-                      <BarChart data={comDados} layout="vertical" barGap={4} barCategoryGap="22%">
+                    <ResponsiveContainer width="100%" height={defasagemCargo.length*42+40}>
+                      <BarChart data={defasagemCargo} layout="vertical" barGap={4} barCategoryGap="22%">
                         <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false}/>
                         <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}}/>
                         <YAxis dataKey="cargo" type="category" tick={{fontSize:10,fill:"#334155"}} width={100}/>
@@ -483,14 +575,13 @@ export default function RedeFisicaPage(){
                     </ResponsiveContainer>
                     {semDados.length>0&&(
                       <div style={{marginTop:12,background:"#f8fafc",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#64748b"}}>
-                        ✅ Sem defasagem: <b style={{color:"#475569"}}>{semDados.map(d=>d.cargo).join(", ")}</b> — quadro ideal não preenchido ou em equilíbrio.
+                        ✅ Sem defasagem: <b style={{color:"#475569"}}>{semDados.map(d=>d.cargo).join(", ")}</b>
                       </div>
                     )}
                   </>)
                 })()}
               </div>
 
-              {/* Cargos por Setor — Atual vs Ideal */}
               <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
                 <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Cargos por Setor/Gerência</div>
                 <div style={{fontSize:11,color:"#94a3b8",marginBottom:12}}>Situação atual vs. ideal — aba "CARGOS NÃO-UNITÁRIOS"</div>
@@ -521,7 +612,6 @@ export default function RedeFisicaPage(){
               </div>
             </div>
 
-            {/* Unidades defasadas + Pizza */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:24}}>
               <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
                 <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>🚨 Unidades com Defasagem ({todasDefasadas.length})</div>
@@ -555,7 +645,6 @@ export default function RedeFisicaPage(){
               </div>
             </div>
 
-            {/* Tabela detalhada */}
             <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:12}}>
                 <div>
@@ -614,10 +703,57 @@ export default function RedeFisicaPage(){
                 </table>
               </div>
             </div>
+
+            {/* SALDO LÍQUIDO POR FUNÇÃO */}
+            <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginTop:24}}>
+              <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>📊 Saldo Líquido por Função — Rede Completa</div>
+              <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>Resultado final: quantos faltam ou sobram no total da rede (soma de todas as escolas)</div>
+              <div style={{fontSize:11,color:"#64748b",marginBottom:16,background:"#f8fafc",borderRadius:8,padding:"8px 12px"}}>
+                ℹ️ Diferente do gráfico acima (que conta escola a escola), este quadro mostra o <b>saldo líquido real</b>: se uma escola tem 2 sobrando e outra tem 3 faltando, o saldo da rede é <b>-1</b>.
+              </div>
+              {(()=>{
+                const saldos = CARGOS.map((cargo,j)=>{
+                  const saldoLiquido = escolas.reduce((s,e)=>s+e.saldo[j], 0)
+                  return {cargo, saldo: saldoLiquido}
+                }).sort((a,b)=>a.saldo-b.saldo)
+                const totalLiquido = saldos.reduce((s,x)=>s+x.saldo, 0)
+                return(
+                  <div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:20}}>
+                      {saldos.map(({cargo, saldo})=>{
+                        const falt = saldo < 0
+                        const eq   = saldo === 0
+                        const cor  = falt?"#b91c1c":eq?"#64748b":"#15803d"
+                        const bg   = falt?"#fee2e2":eq?"#f1f5f9":"#dcfce7"
+                        return(
+                          <div key={cargo} style={{background:bg,borderRadius:12,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${cor}33`}}>
+                            <div>
+                              <div style={{fontSize:11,fontWeight:700,color:"#475569"}}>{cargo}</div>
+                              <div style={{fontSize:9,color:"#94a3b8",marginTop:2}}>{falt?"faltando na rede":eq?"equilibrado":"sobrando na rede"}</div>
+                            </div>
+                            <div style={{fontSize:22,fontWeight:900,color:cor}}>
+                              {saldo > 0 ? `+${saldo}` : saldo}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div style={{background:totalLiquido<0?"#fee2e2":"#dcfce7",borderRadius:12,padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",border:`2px solid ${totalLiquido<0?"#ef4444":"#22c55e"}`}}>
+                      <div>
+                        <div style={{fontWeight:800,fontSize:14,color:totalLiquido<0?"#b91c1c":"#15803d"}}>Saldo Total da Rede</div>
+                        <div style={{fontSize:11,color:"#64748b",marginTop:2}}>Soma de todas as funções em todas as escolas</div>
+                      </div>
+                      <div style={{fontSize:32,fontWeight:900,color:totalLiquido<0?"#b91c1c":"#15803d"}}>
+                        {totalLiquido > 0 ? `+${totalLiquido}` : totalLiquido}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
           </>
         )}
 
-        {/* ════════════════ ABA: POR TGS ════════════════ */}
         {abaAtiva==="tgs"&&(
           <>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:24}}>
@@ -722,17 +858,13 @@ export default function RedeFisicaPage(){
           </>
         )}
 
-        {/* ════════════════ ABA: DISTRIBUIÇÃO ════════════════ */}
         {abaAtiva==="distribuicao"&&(
           <>
             <div style={{background:"#f0f9ff",border:"1.5px solid #7dd3fc",borderRadius:12,padding:"12px 20px",marginBottom:24,fontSize:12,color:"#0369a1"}}>
               📋 Dados da aba <b>CONSOLIDADO</b> · <b>{TOTAL_CONSOLIDADO.toLocaleString("pt-BR")} servidores</b> em 21 funções · verificado em 10/04/2026
             </div>
 
-            {/* Servidores por função + Cenários — lado a lado */}
             <div style={{display:"grid",gridTemplateColumns:"1.1fr 1fr",gap:20,marginBottom:24}}>
-
-              {/* Gráfico de servidores por função — mais estreito */}
               <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
                 <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Servidores por Função</div>
                 <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Total de profissionais ativos (fonte: CONSOLIDADO)</div>
@@ -751,18 +883,12 @@ export default function RedeFisicaPage(){
                 </div>
               </div>
 
-              {/* Cenários de Contratação — gráfico de colunas empilhadas */}
               <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
                 <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>🎯 Cenários de Contratação</div>
                 <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Atual · Mínimo necessário · Ideal por unidade</div>
                 {(()=>{
                   const cargos=NAO_UNITARIOS.filter(c=>c.contratUnit!==null)
-                  const dadosGrafico=cargos.map(c=>({
-                    cargo:c.cargo,
-                    "Quadro Atual":c.atual,
-                    "A Contratar (Mín.)":Math.abs(c.contratNec),
-                    "A Contratar (Ideal)":c.contratUnit,
-                  }))
+                  const dadosGrafico=cargos.map(c=>({cargo:c.cargo,"Quadro Atual":c.atual,"A Contratar (Mín.)":Math.abs(c.contratNec),"A Contratar (Ideal)":c.contratUnit}))
                   const CORES_STACK=["#64748b","#f97316","#22c55e"]
                   const KEYS=["Quadro Atual","A Contratar (Mín.)","A Contratar (Ideal)"]
                   return(
@@ -772,41 +898,30 @@ export default function RedeFisicaPage(){
                           <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
                           <XAxis dataKey="cargo" tick={{fontSize:11,fill:"#334155",fontWeight:600}}/>
                           <YAxis tick={{fontSize:10,fill:"#64748b"}}/>
-                          <Tooltip
-                            content={({active,payload,label})=>{
-                              if(!active||!payload?.length)return null
-                              const c=cargos.find(x=>x.cargo===label)
-                              const minimo=c?c.atual+Math.abs(c.contratNec):0
-                              const ideal=c?c.atual+c.contratUnit:0
-                              return(
-                                <div style={{background:"#fff",border:`1px solid ${COR_BORDA}`,borderRadius:10,padding:"12px 16px",fontSize:11,boxShadow:"0 4px 12px #1a3a8f22"}}>
-                                  <div style={{fontWeight:700,color:COR,marginBottom:8}}>{label}</div>
-                                  {payload.map((p,i)=>(
-                                    <div key={i} style={{display:"flex",justifyContent:"space-between",gap:16,padding:"2px 0",color:p.fill}}>
-                                      <span>● {p.name}</span><b>{p.value}</b>
-                                    </div>
+                          <Tooltip content={({active,payload,label})=>{
+                            if(!active||!payload?.length)return null
+                            const c=cargos.find(x=>x.cargo===label)
+                            const minimo=c?c.atual+Math.abs(c.contratNec):0
+                            const ideal=c?c.atual+c.contratUnit:0
+                            return(
+                              <div style={{background:"#fff",border:`1px solid ${COR_BORDA}`,borderRadius:10,padding:"12px 16px",fontSize:11,boxShadow:"0 4px 12px #1a3a8f22"}}>
+                                <div style={{fontWeight:700,color:COR,marginBottom:8}}>{label}</div>
+                                {payload.map((p,i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",gap:16,padding:"2px 0",color:p.fill}}><span>● {p.name}</span><b>{p.value}</b></div>))}
+                                <div style={{borderTop:`1px solid ${COR_CLARA}`,marginTop:6,paddingTop:6,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,textAlign:"center"}}>
+                                  {[["#64748b","Atual",c?.atual],["#f97316","Mín.",minimo],["#22c55e","Ideal",ideal]].map(([cor,lbl,val])=>(
+                                    <div key={lbl}><div style={{fontSize:16,fontWeight:800,color:cor}}>{val}</div><div style={{fontSize:9,color:"#94a3b8"}}>{lbl}</div></div>
                                   ))}
-                                  <div style={{borderTop:`1px solid ${COR_CLARA}`,marginTop:6,paddingTop:6,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,textAlign:"center"}}>
-                                    {[["#64748b","Atual",c?.atual],["#f97316","Mín.",minimo],["#22c55e","Ideal",ideal]].map(([cor,lbl,val])=>(
-                                      <div key={lbl}><div style={{fontSize:16,fontWeight:800,color:cor}}>{val}</div><div style={{fontSize:9,color:"#94a3b8"}}>{lbl}</div></div>
-                                    ))}
-                                  </div>
                                 </div>
-                              )
-                            }}
-                          />
+                              </div>
+                            )
+                          }}/>
                           <Legend iconType="circle" iconSize={10} wrapperStyle={{fontSize:11}}/>
-                          {KEYS.map((k,i)=>(
-                            <Bar key={k} dataKey={k} stackId="a" fill={CORES_STACK[i]}
-                              radius={i===KEYS.length-1?[4,4,0,0]:[0,0,0,0]}
-                              animationDuration={800+i*200}/>
-                          ))}
+                          {KEYS.map((k,i)=>(<Bar key={k} dataKey={k} stackId="a" fill={CORES_STACK[i]} radius={i===KEYS.length-1?[4,4,0,0]:[0,0,0,0]} animationDuration={800+i*200}/>))}
                         </BarChart>
                       </ResponsiveContainer>
                       <div style={{display:"flex",gap:12,marginTop:12,justifyContent:"center",flexWrap:"wrap"}}>
                         {cargos.map(c=>{
                           const ideal=c.atual+c.contratUnit
-                          const corG=COR_GERENCIA[c.gerencia]||COR
                           return(
                             <div key={c.cargo} style={{background:COR_CLARA,borderRadius:10,padding:"8px 14px",textAlign:"center",minWidth:100}}>
                               <div style={{fontSize:10,color:"#64748b",fontWeight:600,marginBottom:4}}>{c.cargo}</div>
@@ -825,17 +940,24 @@ export default function RedeFisicaPage(){
               </div>
             </div>
 
-            {/* Quadro por unidade escolar — tabela compacta com tooltip de funções */}
             <div style={{background:"#fff",borderRadius:16,padding:"20px 24px",boxShadow:`0 2px 12px ${COR}11`}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:10}}>
-                <div>
-                  <div style={{fontWeight:700,fontSize:14,color:COR}}>Quadro por Unidade Escolar</div>
-                  <div style={{fontSize:11,color:"#94a3b8"}}>Passe o mouse no nome da escola para ver o detalhamento</div>
+              <div style={{marginBottom:12}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:10}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:14,color:COR}}>Quadro por Unidade Escolar</div>
+                    <div style={{fontSize:11,color:"#94a3b8"}}>Passe o mouse no nome da escola para ver o detalhamento completo</div>
+                  </div>
+                  <input placeholder="🔍 Buscar escola..." value={buscaDist} onChange={e=>setBuscaDist(e.target.value)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${COR_BORDA}`,fontSize:11,outline:"none",width:200}}/>
                 </div>
-                <input placeholder="🔍 Buscar escola ou tipo..." value={buscaDist} onChange={e=>setBuscaDist(e.target.value)} style={{padding:"5px 12px",borderRadius:20,border:`1px solid ${COR_BORDA}`,fontSize:11,outline:"none",width:200}}/>
-              </div>
-              <div style={{fontSize:10,color:"#64748b",marginBottom:8}}>
-                Exibindo <b>{escolasDistFiltradas.length}</b> de {CONSOLIDADO_POR_ESCOLA.length} unidades
+                <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                  {["Todos","EM","CMEI","ETI","CEI"].map(t=>{
+                    const ativo=filtroDistTipo===t
+                    return(
+                      <button key={t} onClick={()=>setFiltroDistTipo(t)} style={{padding:"4px 14px",borderRadius:20,border:`2px solid ${t==="Todos"?COR:(COR_TIPO[t]||COR_BORDA)}`,background:ativo?(t==="Todos"?COR:(COR_TIPO[t]||COR)):"#fff",color:ativo?"#fff":(t==="Todos"?COR:(COR_TIPO[t]||"#64748b")),fontSize:11,fontWeight:600,cursor:"pointer",transition:"all 0.2s"}}>{t}</button>
+                    )
+                  })}
+                  <span style={{fontSize:11,color:"#94a3b8"}}>{escolasDistFiltradas.length} unidades</span>
+                </div>
               </div>
               <div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse"}}>
@@ -860,7 +982,7 @@ export default function RedeFisicaPage(){
                           >
                             {e.nome}
                           </span>
-                          {escolaHover===e&&<TooltipFuncoesEscola escola={e}/>}
+                          {escolaHover===e&&<TooltipFuncoesEscola escola={e} mousePos={mousePos}/>}
                         </td>
                         <td style={{padding:"6px 10px",textAlign:"center"}}>
                           <span style={{background:COR_CLARA,color:COR,borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700}}>{e.total}</span>
@@ -874,7 +996,6 @@ export default function RedeFisicaPage(){
           </>
         )}
 
-        {/* ════════════════ ABA: OUTROS SETORES ════════════════ */}
         {abaAtiva==="outros"&&(
           <>
             <div style={{background:"#fff7ed",border:"1.5px solid #fdba74",borderRadius:12,padding:"14px 20px",marginBottom:24,display:"flex",gap:12,alignItems:"center"}}>
@@ -901,7 +1022,6 @@ export default function RedeFisicaPage(){
           </>
         )}
 
-        {/* RODAPÉ */}
         <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginTop:24,borderLeft:"4px solid #94a3b8"}}>
           <div style={{fontWeight:700,fontSize:13,color:"#475569",marginBottom:12}}>📖 Como ler este painel</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,fontSize:12,color:"#64748b",lineHeight:1.7}}>
