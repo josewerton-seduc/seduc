@@ -195,8 +195,12 @@ function parsePrestacao(text) {
     const first = (cols[0] || "").trim()
     // Só processa linhas de escola: começam com "01-", "02-" etc.
     if (!/^\d{2,3}[-–]/.test(first)) continue
+    // Detecta placeholders: nome com só X, traços, espaços ou vazio após o número
+    const nome = first.replace(/^\d{2,3}[-–]\s*/, "").trim()
+    const placeholder = !nome || /^[X\-\s]+$/i.test(nome) || nome.toUpperCase() === nome.replace(/[^A-Z]/g,"").replace(/X+/,"") && /^X+$/.test(nome.replace(/\s/g,""))
     escolas.push({
       escola:         first,
+      placeholder,                   // true = slot reservado sem dados
       saldoAntC:      parseBRL(cols[1]),
       saldoAntK:      parseBRL(cols[2]),
       valExercicioC:  parseBRL(cols[3]),
@@ -484,6 +488,7 @@ export default function GerenciaFinanceiraPage() {
   const [dadosPC,      setDadosPC]      = useState(null)
   const [carregandoPC, setCarregandoPC] = useState(false)
   const [abaPC,        setAbaPC]        = useState("basico")
+  const [buscaPC,      setBuscaPC]      = useState("")
 
   const carregar = useCallback(() => {
     setCarregando(true)
@@ -970,7 +975,17 @@ export default function GerenciaFinanceiraPage() {
             </div>
           )
 
-          const escolas = dadosPC[abaPC] || []
+          const todas    = dadosPC[abaPC] || []
+          // Escolas reais (com nome) vs placeholders (XXXXXXXXXXX ou vazios)
+          const escolasTodas = todas.filter(e=>!e.placeholder)
+          const vagas        = todas.filter(e=>e.placeholder)
+          // Filtro de busca
+          const termo  = buscaPC.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+          const escolas = termo
+            ? escolasTodas.filter(e=>
+                e.escola.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").includes(termo)
+              )
+            : escolasTodas
           const totalDesp    = escolas.reduce((s,e)=>s+(e.despesasC||0)+(e.despesasK||0),0)
           const totalRec     = escolas.reduce((s,e)=>s+(e.totalRecC||0)+(e.totalRecK||0),0)
           const totalSaldoBanc = escolas.reduce((s,e)=>s+(e.saldoBancario||0),0)
@@ -1007,7 +1022,7 @@ export default function GerenciaFinanceiraPage() {
             {/* Sub-abas de programa */}
             <div style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>
               {PROGRAMAS_PC.map(p=>(
-                <button key={p.id} onClick={()=>setAbaPC(p.id)} style={{
+                <button key={p.id} onClick={()=>{ setAbaPC(p.id); setBuscaPC("") }} style={{
                   padding:"7px 18px",borderRadius:20,border:`1px solid ${abaPC===p.id?COR:COR_BORDA}`,
                   cursor:"pointer",fontWeight:600,fontSize:12,transition:"all 0.2s",
                   background:abaPC===p.id?COR:COR_CLARA,
@@ -1020,7 +1035,7 @@ export default function GerenciaFinanceiraPage() {
             {/* KPIs do programa selecionado */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,marginBottom:24}}>
               {[
-                {label:"Escolas",            valor:nEscolas,        icon:"🏫",sub:"com registro no programa"},
+                {label:"Escolas com dados",   valor:nEscolas,        icon:"🏫",sub:vagas.length>0?`+ ${vagas.length} vaga${vagas.length>1?"s":""}  aguardando`:"todas preenchidas"},
                 {label:"Total Receita",       valor:fmtM(totalRec),  icon:"📥",sub:"custeio + capital"},
                 {label:"Total Despesas",      valor:fmtM(totalDesp), icon:"💸",sub:"custeio + capital"},
                 {label:"Saldo Bancário Total",valor:fmtM(totalSaldoBanc),icon:"🏦",sub:"soma dos saldos nas contas"},
@@ -1065,10 +1080,42 @@ export default function GerenciaFinanceiraPage() {
 
               {/* Tabela de escolas */}
               {card(<>
-                {cardTitle(
-                  `Consolidado por Escola — ${PROGRAMAS_PC.find(p=>p.id===abaPC)?.label} 2025`,
-                  `${nEscolas} escola${nEscolas!==1?"s":""} · valores de custeio + capital`
-                )}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:14,color:COR}}>
+                      {`Consolidado por Escola — ${PROGRAMAS_PC.find(p=>p.id===abaPC)?.label} 2025`}
+                    </div>
+                    <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>
+                      {termo
+                        ? `${escolas.length} resultado${escolas.length!==1?"s":""} para "${buscaPC}" · ${nEscolas} no total`
+                        : `${nEscolas} escola${nEscolas!==1?"s":""} · valores de custeio + capital`}
+                    </div>
+                  </div>
+                  <div style={{position:"relative",flexShrink:0}}>
+                    <input
+                      type="text"
+                      value={buscaPC}
+                      onChange={e=>setBuscaPC(e.target.value)}
+                      placeholder="Buscar escola..."
+                      style={{
+                        padding:"6px 32px 6px 10px",borderRadius:20,fontSize:11,
+                        border:`1px solid ${buscaPC?COR:COR_BORDA}`,outline:"none",
+                        background:"#fff",color:"#334155",width:180,
+                        boxShadow:buscaPC?`0 0 0 2px ${COR}22`:"none",transition:"all 0.2s",
+                      }}
+                    />
+                    {buscaPC
+                      ? <span onClick={()=>setBuscaPC("")} style={{
+                          position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+                          cursor:"pointer",fontSize:13,color:"#94a3b8",lineHeight:1,userSelect:"none",
+                        }}>✕</span>
+                      : <span style={{
+                          position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+                          fontSize:12,color:"#94a3b8",pointerEvents:"none",
+                        }}>🔍</span>
+                    }
+                  </div>
+                </div>
                 <div style={{overflowY:"auto",maxHeight:380}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                     <thead style={{position:"sticky",top:0,background:"#fff"}}>
@@ -1115,22 +1162,39 @@ export default function GerenciaFinanceiraPage() {
                           </tr>
                         )
                       })}
-                      {/* Linha de totais */}
+                      {/* Vagas sem dados — só aparece sem filtro ativo */}
+                      {!termo && vagas.length > 0 && vagas.map((e,i)=>(
+                        <tr key={"vaga-"+i} style={{borderBottom:`1px solid ${COR_CLARA}`,opacity:0.45}}>
+                          <td colSpan={8} style={{padding:"5px 8px",fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>
+                            <span style={{marginRight:6,fontSize:9,background:"#e2e8f0",borderRadius:4,padding:"1px 5px",color:"#64748b"}}>
+                              {e.escola.match(/^\d{2,3}/)?.[0]}
+                            </span>
+                            Vaga reservada — escola ainda não incluída neste programa
+                          </td>
+                        </tr>
+                      ))}
+                      {/* Linha de totais / subtotal */}
                       {escolas.length > 0 && (()=>{
                         const tSAnt   = escolas.reduce((s,e)=>s+(e.saldoAntC||0)+(e.saldoAntK||0),0)
                         const tVExerc = escolas.reduce((s,e)=>s+(e.valExercicioC||0)+(e.valExercicioK||0),0)
                         const tRend   = escolas.reduce((s,e)=>s+(e.rendimentosC||0)+(e.rendimentosK||0),0)
                         const tSRepr  = escolas.reduce((s,e)=>s+(e.saldoReprC||0)+(e.saldoReprK||0),0)
+                        const tRec2   = escolas.reduce((s,e)=>s+(e.totalRecC||0)+(e.totalRecK||0),0)
+                        const tDesp2  = escolas.reduce((s,e)=>s+(e.despesasC||0)+(e.despesasK||0),0)
+                        const tBanc2  = escolas.reduce((s,e)=>s+(e.saldoBancario||0),0)
+                        const label   = termo
+                          ? `SUBTOTAL (${escolas.length} de ${nEscolas})`
+                          : `TOTAL (${nEscolas} escola${nEscolas!==1?"s":""})`
                         return (
                           <tr style={{borderTop:`2px solid ${COR_BORDA}`,background:COR_CLARA,fontWeight:700}}>
-                            <td style={{padding:"8px 8px",fontSize:10,color:COR}}>TOTAL ({nEscolas} escolas)</td>
+                            <td style={{padding:"8px 8px",fontSize:10,color:COR}}>{label}</td>
                             <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:"#334155"}}>{fmtPC(tSAnt)}</td>
                             <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:"#334155"}}>{fmtPC(tVExerc)}</td>
                             <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:"#334155"}}>{fmtPC(tRend)}</td>
-                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:"#15803d"}}>{fmtPC(totalRec)}</td>
-                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:COR}}>{fmtPC(totalDesp)}</td>
+                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:"#15803d"}}>{fmtPC(tRec2)}</td>
+                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:COR}}>{fmtPC(tDesp2)}</td>
                             <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:tSRepr>=0?"#15803d":"#b91c1c"}}>{fmtPC(tSRepr)}</td>
-                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:"#0369a1"}}>{fmtPC(totalSaldoBanc)}</td>
+                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:"#0369a1"}}>{fmtPC(tBanc2)}</td>
                           </tr>
                         )
                       })()}
