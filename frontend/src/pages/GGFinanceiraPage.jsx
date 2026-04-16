@@ -20,6 +20,14 @@ const URL_FONTES   = BASE + "&gid=86807994"
 const URL_RECEITAS = BASE + "&gid=40577423"
 const URL_DESPESAS = BASE + "&gid=1948933385"
 
+/* ── URLs Prestação de Contas ────────────────────────────────────────────── */
+// PDDE Básico está numa planilha separada; Mais Educação, Qualidade e Estrutura compartilham outra
+const URL_PC_BASICO  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSq-mIFdrM6PUXkEEcVTkweokYTtfYz15Ju_LY_ccLN-9F4YusX4I7YUyKbkZhKVg/pub?gid=359827437&single=true&output=csv"
+const BASE_PC2       = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTr1jm94EgzKJuGD8F7iq7EdjaiE3DEsP2UVPv08082i9RvvYs34M1Y2pmiAqTUTA/pub"
+const URL_PC_MAISEDU = BASE_PC2 + "?gid=1814849863&single=true&output=csv"
+const URL_PC_QUALID  = BASE_PC2 + "?gid=487467058&single=true&output=csv"
+const URL_PC_ESTRT   = BASE_PC2 + "?gid=856942013&single=true&output=csv"
+
 /* ── Meses do ano ────────────────────────────────────────────────────────── */
 const MESES = [
   {k:"jan",s:"Jan",l:"Janeiro",  col:1},
@@ -173,6 +181,42 @@ function parseDespesas(text) {
   return items
 }
 
+/* ── Prestação de Contas: parser ─────────────────────────────────────────── */
+// Colunas: 0=Escola, 1-2=Saldo Ant C/K, 3-4=Val.Exercício C/K,
+//          5-6=Rec.Próprios C/K, 7-8=Rendimentos C/K,
+//          9-10=Total Receita C/K, 11-12=Despesas C/K,
+//          13-14=Saldo Reprog C/K, 15=Saldo Bancário
+function parsePrestacao(text) {
+  const clean = text.replace(/^\uFEFF/, "")
+  const escolas = []
+  for (const raw of clean.split(/\r?\n/)) {
+    const line = raw.trim(); if (!line) continue
+    const cols = parseCSVLine(line)
+    const first = (cols[0] || "").trim()
+    // Só processa linhas de escola: começam com "01-", "02-" etc.
+    if (!/^\d{2,3}[-–]/.test(first)) continue
+    escolas.push({
+      escola:         first,
+      saldoAntC:      parseBRL(cols[1]),
+      saldoAntK:      parseBRL(cols[2]),
+      valExercicioC:  parseBRL(cols[3]),
+      valExercicioK:  parseBRL(cols[4]),
+      recPropC:       parseBRL(cols[5]),
+      recPropK:       parseBRL(cols[6]),
+      rendimentosC:   parseBRL(cols[7]),
+      rendimentosK:   parseBRL(cols[8]),
+      totalRecC:      parseBRL(cols[9]),
+      totalRecK:      parseBRL(cols[10]),
+      despesasC:      parseBRL(cols[11]),
+      despesasK:      parseBRL(cols[12]),
+      saldoReprC:     parseBRL(cols[13]),
+      saldoReprK:     parseBRL(cols[14]),
+      saldoBancario:  parseBRL(cols[15]),
+    })
+  }
+  return escolas
+}
+
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 function fmtM(v) {
   if (v === undefined || v === null || isNaN(v)) return "–"
@@ -186,6 +230,12 @@ function fmtExato(v) {
   if (v === undefined || v === null || isNaN(v) || Math.abs(v) < 1e3) return null
   const abs = Math.abs(v)
   return (v < 0 ? "-" : "") + "R$ " + abs.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})
+}
+// Sempre mostra o valor exato em BRL (para Prestação de Contas)
+function fmtPC(v) {
+  if (!v && v !== 0) return "–"
+  if (isNaN(v) || v === 0) return "–"
+  return (v < 0 ? "-" : "") + "R$ " + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})
 }
 function tipoGrupo(obj) {
   const o = nrm(obj||"")
@@ -431,6 +481,10 @@ export default function GerenciaFinanceiraPage() {
   const [updated,    setUpdated]    = useState(null)
   const [aba,        setAba]        = useState("geral")
 
+  const [dadosPC,      setDadosPC]      = useState(null)
+  const [carregandoPC, setCarregandoPC] = useState(false)
+  const [abaPC,        setAbaPC]        = useState("basico")
+
   const carregar = useCallback(() => {
     setCarregando(true)
     Promise.all([
@@ -447,6 +501,28 @@ export default function GerenciaFinanceiraPage() {
   },[])
 
   useEffect(()=>{ carregar() },[carregar])
+
+  // Carrega dados de Prestação de Contas apenas quando a aba for aberta
+  useEffect(()=>{
+    if (aba !== "prestacao" || dadosPC || carregandoPC) return
+    setCarregandoPC(true)
+    Promise.all([
+      fetch(URL_PC_BASICO).then(r=>r.text()),
+      fetch(URL_PC_MAISEDU).then(r=>r.text()),
+      fetch(URL_PC_QUALID).then(r=>r.text()),
+      fetch(URL_PC_ESTRT).then(r=>r.text()),
+    ])
+    .then(([tB,tM,tQ,tE])=>{
+      setDadosPC({
+        basico:    parsePrestacao(tB),
+        maisEdu:   parsePrestacao(tM),
+        qualidade: parsePrestacao(tQ),
+        estrutura: parsePrestacao(tE),
+      })
+    })
+    .catch(()=>setDadosPC({}))
+    .finally(()=>setCarregandoPC(false))
+  },[aba, dadosPC, carregandoPC])
 
   /* ── Loading ─────────────────────────────────────────────────────────── */
   if (carregando) return (
@@ -530,7 +606,13 @@ export default function GerenciaFinanceiraPage() {
   const percFundeb = previsto>0 ? (fundebRow?.anual||0)/previsto*100 : 0
 
   /* ── Estilos das abas ────────────────────────────────────────────────── */
-  const ABAS = [{id:"geral",label:"Visão Geral"},{id:"fontes",label:"Fontes"},{id:"receitas",label:"Receitas"},{id:"despesas",label:"Despesas"}]
+  const ABAS = [
+    {id:"geral",     label:"Visão Geral"},
+    {id:"fontes",    label:"Fontes"},
+    {id:"receitas",  label:"Receitas"},
+    {id:"despesas",  label:"Despesas"},
+    {id:"prestacao", label:"Prestação de Contas"},
+  ]
 
   const card = (children, extra={}) => (
     <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,...extra}}>{children}</div>
@@ -863,6 +945,202 @@ export default function GerenciaFinanceiraPage() {
             </div>
           </>,{marginBottom:0})}
         </>}
+
+        {/* ════════════════ ABA: PRESTAÇÃO DE CONTAS ════════════════ */}
+        {aba==="prestacao" && (()=>{
+          const PROGRAMAS_PC = [
+            {id:"basico",    label:"PDDE Básico",    key:"basico"},
+            {id:"maisEdu",   label:"Mais Educação",  key:"maisEdu"},
+            {id:"qualidade", label:"Qualidade",      key:"qualidade"},
+            {id:"estrutura", label:"Estrutura",      key:"estrutura"},
+          ]
+
+          if (carregandoPC) return (
+            <div style={{textAlign:"center",padding:"60px 0",color:COR}}>
+              <div style={{fontSize:36,marginBottom:12}}>⏳</div>
+              <div style={{fontWeight:600,fontSize:14}}>Carregando Prestação de Contas...</div>
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:6}}>Buscando dados das planilhas PDDE</div>
+            </div>
+          )
+
+          if (!dadosPC || Object.keys(dadosPC).length===0) return (
+            <div style={{textAlign:"center",padding:"60px 0",color:"#b91c1c"}}>
+              <div style={{fontSize:36,marginBottom:12}}>⚠️</div>
+              <div style={{fontWeight:600}}>Não foi possível carregar os dados de Prestação de Contas.</div>
+            </div>
+          )
+
+          const escolas = dadosPC[abaPC] || []
+          const totalDesp    = escolas.reduce((s,e)=>s+(e.despesasC||0)+(e.despesasK||0),0)
+          const totalRec     = escolas.reduce((s,e)=>s+(e.totalRecC||0)+(e.totalRecK||0),0)
+          const totalSaldoBanc = escolas.reduce((s,e)=>s+(e.saldoBancario||0),0)
+          const nEscolas     = escolas.length
+
+          // Nomes curtos das escolas para o gráfico
+          const dadosGraf = escolas
+            .filter(e=>e.saldoBancario>0)
+            .sort((a,b)=>b.saldoBancario-a.saldoBancario)
+            .slice(0,15)
+            .map(e=>({
+              nome: e.escola.replace(/^\d{2,3}[-–]\s*/,"").slice(0,22),
+              saldo: parseFloat(e.saldoBancario.toFixed(2)),
+            }))
+
+          return <>
+            {/* Cabeçalho da aba */}
+            <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20}}>
+              <div>
+                <div style={{fontSize:18,fontWeight:800,color:COR}}>Prestação de Contas — PDDE</div>
+                <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>
+                  Consolidado por escola · Exercício
+                  <span style={{
+                    display:"inline-block",marginLeft:8,padding:"2px 10px",
+                    background:COR,color:"#fff",borderRadius:20,fontWeight:700,fontSize:11
+                  }}>2025</span>
+                  <span style={{marginLeft:8,color:"#b8930a",fontSize:11}}>
+                    — Para adicionar anos futuros, basta publicar a planilha e atualizar o link.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub-abas de programa */}
+            <div style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>
+              {PROGRAMAS_PC.map(p=>(
+                <button key={p.id} onClick={()=>setAbaPC(p.id)} style={{
+                  padding:"7px 18px",borderRadius:20,border:`1px solid ${abaPC===p.id?COR:COR_BORDA}`,
+                  cursor:"pointer",fontWeight:600,fontSize:12,transition:"all 0.2s",
+                  background:abaPC===p.id?COR:COR_CLARA,
+                  color:abaPC===p.id?"#fff":COR_ESCURA,
+                  boxShadow:abaPC===p.id?`0 2px 8px ${COR}44`:"none",
+                }}>{p.label}</button>
+              ))}
+            </div>
+
+            {/* KPIs do programa selecionado */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,marginBottom:24}}>
+              {[
+                {label:"Escolas",            valor:nEscolas,        icon:"🏫",sub:"com registro no programa"},
+                {label:"Total Receita",       valor:fmtM(totalRec),  icon:"📥",sub:"custeio + capital"},
+                {label:"Total Despesas",      valor:fmtM(totalDesp), icon:"💸",sub:"custeio + capital"},
+                {label:"Saldo Bancário Total",valor:fmtM(totalSaldoBanc),icon:"🏦",sub:"soma dos saldos nas contas"},
+              ].map(k=>(
+                <div key={k.label} style={{background:"#fff",borderRadius:14,padding:"16px 18px",
+                  boxShadow:`0 2px 12px ${COR}22`,borderLeft:`4px solid ${COR}`,
+                  display:"flex",alignItems:"center",gap:12}}>
+                  <span style={{fontSize:24}}>{k.icon}</span>
+                  <div>
+                    <div style={{fontSize:20,fontWeight:800,color:COR}}>{k.valor}</div>
+                    <div style={{fontSize:11,color:"#64748b",fontWeight:600}}>{k.label}</div>
+                    <div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>{k.sub}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Gráfico + Tabela */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1.8fr",gap:20,marginBottom:0}}>
+
+              {/* Gráfico: saldo bancário por escola */}
+              {card(<>
+                {cardTitle("Saldo Bancário por Escola","Top 15 maiores saldos · 2025")}
+                {dadosGraf.length > 0
+                  ? <ResponsiveContainer width="100%" height={360}>
+                      <BarChart data={dadosGraf} layout="vertical" barCategoryGap="16%" margin={{right:60}}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#fef9c3" horizontal={false}/>
+                        <XAxis type="number" tick={{fontSize:9,fill:"#64748b"}}
+                          tickFormatter={v=>v>=1000?`R$${(v/1000).toFixed(0)}K`:`R$${v}`}/>
+                        <YAxis dataKey="nome" type="category" tick={{fontSize:9,fill:"#64748b"}} width={110}/>
+                        <Tooltip formatter={v=>[fmtPC(v),""]}/>
+                        <Bar dataKey="saldo" name="Saldo Bancário" fill={COR} radius={[0,6,6,0]}>
+                          {dadosGraf.map((_,i)=><Cell key={i} fill={CORES_BAR[i%CORES_BAR.length]}/>)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  : <div style={{padding:"40px 0",textAlign:"center",color:"#94a3b8",fontSize:12}}>
+                      Nenhum saldo bancário registrado para este programa.
+                    </div>
+                }
+              </>)}
+
+              {/* Tabela de escolas */}
+              {card(<>
+                {cardTitle(
+                  `Consolidado por Escola — ${PROGRAMAS_PC.find(p=>p.id===abaPC)?.label} 2025`,
+                  `${nEscolas} escola${nEscolas!==1?"s":""} · valores de custeio + capital`
+                )}
+                <div style={{overflowY:"auto",maxHeight:380}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                    <thead style={{position:"sticky",top:0,background:"#fff"}}>
+                      <tr style={{borderBottom:`2px solid ${COR_CLARA}`}}>
+                        {["ESCOLA","SALDO ANT.","VAL. EXERC.","RENDIM.","TOTAL REC.","DESPESAS","SALDO REPR.","SALDO BANC."].map(h=>(
+                          <th key={h} style={{
+                            textAlign:h==="ESCOLA"?"left":"right",
+                            padding:"6px 8px",fontSize:9,color:"#94a3b8",
+                            fontWeight:700,letterSpacing:0.8,whiteSpace:"nowrap"
+                          }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {escolas.map((e,i)=>{
+                        const sAnt  = (e.saldoAntC||0)+(e.saldoAntK||0)
+                        const vExerc = (e.valExercicioC||0)+(e.valExercicioK||0)
+                        const rend  = (e.rendimentosC||0)+(e.rendimentosK||0)
+                        const tRec  = (e.totalRecC||0)+(e.totalRecK||0)
+                        const desp  = (e.despesasC||0)+(e.despesasK||0)
+                        const sRepr = (e.saldoReprC||0)+(e.saldoReprK||0)
+                        const sBanc = e.saldoBancario||0
+                        const nomeEscola = e.escola.replace(/^\d{2,3}[-–]\s*/,"")
+                        return (
+                          <tr key={i} style={{
+                            borderBottom:`1px solid ${COR_CLARA}`,
+                            background:i%2===0?"#fff":"#fffef7"
+                          }}>
+                            <td style={{padding:"7px 8px",fontWeight:600,color:"#334155",maxWidth:160,
+                              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              <span style={{fontSize:9,color:"#94a3b8",marginRight:4}}>
+                                {e.escola.match(/^\d{2,3}/)?.[0]}
+                              </span>
+                              {nomeEscola}
+                            </td>
+                            <td style={{padding:"7px 8px",textAlign:"right",color:"#64748b"}}>{fmtPC(sAnt)}</td>
+                            <td style={{padding:"7px 8px",textAlign:"right",color:"#64748b"}}>{fmtPC(vExerc)}</td>
+                            <td style={{padding:"7px 8px",textAlign:"right",color:"#64748b"}}>{fmtPC(rend)}</td>
+                            <td style={{padding:"7px 8px",textAlign:"right",color:"#15803d",fontWeight:600}}>{fmtPC(tRec)}</td>
+                            <td style={{padding:"7px 8px",textAlign:"right",color:COR,fontWeight:600}}>{fmtPC(desp)}</td>
+                            <td style={{padding:"7px 8px",textAlign:"right",color:sRepr>=0?"#15803d":"#b91c1c",fontWeight:600}}>{fmtPC(sRepr)}</td>
+                            <td style={{padding:"7px 8px",textAlign:"right",fontWeight:700,
+                              color:sBanc>0?"#0369a1":"#94a3b8"}}>{fmtPC(sBanc)}</td>
+                          </tr>
+                        )
+                      })}
+                      {/* Linha de totais */}
+                      {escolas.length > 0 && (()=>{
+                        const tSAnt   = escolas.reduce((s,e)=>s+(e.saldoAntC||0)+(e.saldoAntK||0),0)
+                        const tVExerc = escolas.reduce((s,e)=>s+(e.valExercicioC||0)+(e.valExercicioK||0),0)
+                        const tRend   = escolas.reduce((s,e)=>s+(e.rendimentosC||0)+(e.rendimentosK||0),0)
+                        const tSRepr  = escolas.reduce((s,e)=>s+(e.saldoReprC||0)+(e.saldoReprK||0),0)
+                        return (
+                          <tr style={{borderTop:`2px solid ${COR_BORDA}`,background:COR_CLARA,fontWeight:700}}>
+                            <td style={{padding:"8px 8px",fontSize:10,color:COR}}>TOTAL ({nEscolas} escolas)</td>
+                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:"#334155"}}>{fmtPC(tSAnt)}</td>
+                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:"#334155"}}>{fmtPC(tVExerc)}</td>
+                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:"#334155"}}>{fmtPC(tRend)}</td>
+                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:"#15803d"}}>{fmtPC(totalRec)}</td>
+                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:COR}}>{fmtPC(totalDesp)}</td>
+                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:tSRepr>=0?"#15803d":"#b91c1c"}}>{fmtPC(tSRepr)}</td>
+                            <td style={{padding:"8px 8px",textAlign:"right",fontSize:10,color:"#0369a1"}}>{fmtPC(totalSaldoBanc)}</td>
+                          </tr>
+                        )
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </>)}
+            </div>
+          </>
+        })()}
 
         <div style={{textAlign:"center",fontSize:10,color:"#94a3b8",paddingTop:16}}>
           Fonte: Planilha SEDUC 2026 (Google Sheets) — dados carregados automaticamente
