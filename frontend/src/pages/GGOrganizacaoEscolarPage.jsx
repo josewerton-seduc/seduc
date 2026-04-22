@@ -1,594 +1,711 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import Header from "../components/Header"
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
 } from "recharts"
 
-const COR = "#2d6a4f"
-const COR_CLARA = "#f0f7f2"
-const COR_BORDA = "#a8d5b5"
+/* ── Paleta ──────────────────────────────────────────────────────────────── */
+const COR        = "#2d6a4f"
+const COR_CLARA  = "#f0f7f2"
+const COR_BORDA  = "#a8d5b5"
+const VERMELHO   = "#b91c1c"
+const LARANJA    = "#d97706"
+const AZUL       = "#0369a1"
 
-const URL_ESPERA       = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTroGKeTYOAQDHfCNDEzVKzECaSpwD5Jq1TqLGq1nh4GaQFEHD0ZPfDuoGqyg3NLYbLOOdJzLkI7CLE/pub?gid=0&single=true&output=csv"
-const URL_MATRICULADOS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSSMzkaw9qDWkvXcsUXs_5E0rXH0n0TiDVN5AeJ_LYSET6cOiv3QxQFK5chqGOeciMEPtJu8ekgJyXX/pub?gid=0&single=true&output=csv"
+/* ── URLs Google Sheets ──────────────────────────────────────────────────── */
+const URL_REGULAR = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpGK8KG3Qk1vG1Dq3VW9oE3hko3cLnVycX2gcKjSZ86CmO0xe_lhPs-1ojOAtzvuXkxiuR5qxT7qqC/pub?gid=1965629032&single=true&output=csv"
+const URL_CRECHE  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpGK8KG3Qk1vG1Dq3VW9oE3hko3cLnVycX2gcKjSZ86CmO0xe_lhPs-1ojOAtzvuXkxiuR5qxT7qqC/pub?gid=2002999141&single=true&output=csv"
+const URL_PNTP    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQOTHk0W9GxuLy5ldKLn10HiInUhOtFpGHxXELP6DCeHWIwA51OSVXMtYPK1a4Kh05IVDJCi5kIO2tt/pub?gid=574473705&single=true&output=csv"
 
-// Fonte: gerente de organização escolar
-const NOVOS_CMEIS_2026 = ["Rendeiras","Sítio Cipó","São João da Escócia","Rafael","Alvorada do Ipojuca"]
-
-function parseCSV(csv) {
-  const records = []
-  let current = [], field = "", inQ = false
-  for (let i = 0; i < csv.length; i++) {
-    const ch = csv[i], nx = csv[i+1]
-    if (ch==='"'){if(inQ&&nx==='"'){field+='"';i++}else inQ=!inQ}
-    else if(ch===','&&!inQ){current.push(field.trim());field=""}
-    else if((ch==='\n'||ch==='\r')&&!inQ){
-      if(ch==='\r'&&nx==='\n')i++
-      current.push(field.trim());field=""
-      if(current.some(c=>c!==""))records.push(current)
-      current=[]
-    }else field+=ch
+/* ── CSV parser ──────────────────────────────────────────────────────────── */
+function parseCSV(text) {
+  const rows = []; let row = [], field = "", inQ = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], nx = text[i + 1]
+    if (c === '"') { if (inQ && nx === '"') { field += '"'; i++ } else inQ = !inQ }
+    else if (c === ',' && !inQ) { row.push(field.trim()); field = "" }
+    else if ((c === '\n' || c === '\r') && !inQ) {
+      if (c === '\r' && nx === '\n') i++
+      row.push(field.trim()); field = ""
+      if (row.some(f => f !== "")) rows.push(row)
+      row = []
+    } else field += c
   }
-  if(field||current.length){current.push(field.trim());if(current.some(c=>c!==""))records.push(current)}
-  return records
+  if (field || row.length) { row.push(field.trim()); if (row.some(f => f !== "")) rows.push(row) }
+  return rows
 }
 
-function normNome(s){
-  return s.toUpperCase()
-    .replace(/CENTRO MUNICIPAL DE EDUCA[ÇC][AÃ]O INFANTIL /g,"")
-    .replace(/CMEI /g,"").trim()
+function num(s) {
+  const n = parseFloat((s || "").toString().replace(/\./g, "").replace(",", ".").trim())
+  return isNaN(n) ? 0 : n
 }
 
-function faixaRenda(r){
-  try{
-    const v=parseFloat(r.replace("R$","").replace(/\./g,"").replace(",",".").trim())
-    if(v===0)return"Sem renda"
-    if(v<=750)return"Até R$750"
-    if(v<=1500)return"R$750–R$1.500"
-    if(v<=3000)return"R$1.500–R$3.000"
-    return"Acima R$3.000"
-  }catch{return null}
+/* ── Parsers específicos ─────────────────────────────────────────────────── */
+function parseLacunas(text) {
+  const rows = parseCSV(text).slice(1) // pula cabeçalho
+  return rows
+    .filter(r => r[0] && r[0].toLowerCase() !== "total geral" && r[0] !== "UNIDADE ESCOLAR")
+    .map(r => ({ escola: r[0].trim(), aulas: num(r[1]), professores: num(r[2]) }))
+    .filter(r => r.professores > 0)
 }
 
-function processarDados(csvEspera, csvMatric) {
-  const espera = parseCSV(csvEspera).slice(1)
-  const matric  = parseCSV(csvMatric).slice(1)
-
-  const totalEspera   = espera.length
-  const totalMatric   = matric.length
-  const comBF         = espera.filter(r=>r[46]?.toUpperCase()==="SIM").length
-  const pcdTotal      = espera.filter(r=>r[15]?.toUpperCase()==="SIM").length
-  const usaTransporte = matric.filter(r=>r[5]?.toLowerCase().includes("público")).length
-  const gemeos        = espera.filter(r=>r[9]?.toUpperCase()==="SIM").length
-  const irmaoCreche   = espera.filter(r=>r[25]?.toUpperCase()==="SIM").length
-
-  // Distribuição de pontuação
-  const distPts = {}
-  espera.forEach(r=>{const p=r[28]?.trim();if(p&&!isNaN(p))distPts[p]=(distPts[p]||0)+1})
-  const pontData = Object.entries(distPts).map(([pts,total])=>({pts:`${pts} pts`,total})).sort((a,b)=>parseInt(a.pts)-parseInt(b.pts))
-
-  // Faixa etária
-  const porTurma={}
-  espera.forEach(r=>{const t=r[23]?.trim();if(t)porTurma[t]=(porTurma[t]||0)+1})
-  const turmasData=Object.entries(porTurma).map(([turma,total])=>({turma,total})).sort((a,b)=>b.total-a.total)
-
-  // Renda
-  const rendaOrdem=["Sem renda","Até R$750","R$750–R$1.500","R$1.500–R$3.000","Acima R$3.000"]
-  const porRenda={}
-  espera.forEach(r=>{const f=faixaRenda(r[45]||"");if(f)porRenda[f]=(porRenda[f]||0)+1})
-  const rendaData=rendaOrdem.filter(k=>porRenda[k]).map(k=>({faixa:k,total:porRenda[k]}))
-
-  // Bairros
-  const bE={}, bM={}
-  espera.forEach(r=>{const b=r[14]?.trim().toUpperCase();if(b&&b!=="...")bE[b]=(bE[b]||0)+1})
-  matric.forEach(r=>{const b=r[8]?.trim().toUpperCase();if(b)bM[b]=(bM[b]||0)+1})
-
-  const topBairrosEspera=Object.entries(bE)
-    .map(([bairro,total])=>({bairro:bairro.slice(0,22),bairroFull:bairro,total}))
-    .sort((a,b)=>b.total-a.total).slice(0,12)
-
-  // Pressão por bairro — separando bairros SEM matriculados dos que TÊM
-  const pressaoBairros=Object.entries(bE)
-    .filter(([b])=>b!=="...")
-    .map(([b,e])=>{
-      const m=bM[b]||0
-      const pressao=m===0?(e>0?100:0):Math.round(e/(m+e)*100)
-      return{bairro:b.slice(0,20),bairroFull:b,espera:e,matriculados:m,pressao}
-    })
-    .filter(b=>b.espera>=10)
-    .sort((a,b)=>b.pressao-a.pressao)
-    .slice(0,14)
-
-  // Bairros sem nenhum matriculado (100% pressão, dados da espera)
-  // ATENÇÃO: isso significa que nenhuma criança dessa fila mora nesse bairro E está matriculada
-  // Não confirma ausência de CMEI no bairro
-  const bairrosSemMatriculados=pressaoBairros.filter(b=>b.matriculados===0)
-
-  // CMEIs
-  const cmeiDados={}
-  espera.forEach(r=>{
-    const cmei=r[24]?.trim()
-    if(!cmei)return
-    if(!cmeiDados[cmei])cmeiDados[cmei]={total:0,bf:0,pcd:0,inf1:0,inf2:0,inf3:0}
-    cmeiDados[cmei].total++
-    if(r[46]?.toUpperCase()==="SIM")cmeiDados[cmei].bf++
-    if(r[15]?.toUpperCase()==="SIM")cmeiDados[cmei].pcd++
-    const t=r[23]?.trim()
-    if(t?.includes("1"))cmeiDados[cmei].inf1++
-    else if(t?.includes("2"))cmeiDados[cmei].inf2++
-    else if(t?.includes("3"))cmeiDados[cmei].inf3++
-  })
-
-  const escMatric={}
-  matric.forEach(r=>{const n=normNome(r[2]?.trim()||"");escMatric[n]=(escMatric[n]||0)+1})
-
-  const topCmeiPrioridade=Object.entries(cmeiDados)
-    .map(([cmei,d])=>{
-      const nomeSimples=cmei.replace(/CMEI |CEI /g,"")
-      const cap=escMatric[normNome(cmei)]||0
-      const pctBF=Math.round(d.bf/d.total*100)
-      return{cmei:nomeSimples.slice(0,35),total:d.total,bf:d.bf,pcd:d.pcd,
-             inf1:d.inf1,inf2:d.inf2,inf3:d.inf3,capacidade:cap,pctBF}
-    })
-    .sort((a,b)=>b.total-a.total).slice(0,12)
-
-  const porModalidade={}
-  matric.forEach(r=>{
-    const m=r[4]?.trim()||""
-    const k=m.includes("0 A 3")?"Creche 0-3 anos":m.includes("PRÉ")||m.includes("PRE")?"Pré-escola":"Educação Infantil"
-    porModalidade[k]=(porModalidade[k]||0)+1
-  })
-
-  const topEscolas=Object.entries(escMatric)
-    .map(([escola,total])=>({escola:escola.slice(0,28),total}))
-    .sort((a,b)=>b.total-a.total).slice(0,10)
-
-  return{
-    totalEspera,totalMatric,comBF,pcdTotal,usaTransporte,gemeos,irmaoCreche,
-    turmasData,rendaData,topBairrosEspera,pressaoBairros,bairrosSemMatriculados,
-    topCmeiPrioridade,topEscolas,porModalidade,pontData,espera,bE,bM,
-  }
+function parsePNTP(text) {
+  // 2 linhas de cabeçalho + dados + última linha TOTAL
+  const rows = parseCSV(text).slice(2)
+  return rows
+    .filter(r => r[2] && r[2].toLowerCase() !== "total" && r[2] !== "CMEI")
+    .map(r => ({
+      tgs:       r[0]?.trim() || "",        // a ser preenchido
+      bairro:    r[1]?.trim() || "",        // a ser preenchido
+      cmei:      r[2]?.trim().replace(/\*/g, "").trim(),
+      asterisco: r[2]?.includes("*") || false,
+      cap:       num(r[3]),
+      matric:    num(r[4]),
+      vagaI1:    num(r[5]),
+      vagaI2:    num(r[6]),
+      vagaI3:    num(r[7]),
+      vagaI4:    num(r[8]),
+      vagaI5:    num(r[9]),
+      esperaI1:  num(r[10]),
+      esperaI2:  num(r[11]),
+      esperaI3:  num(r[12]),
+    }))
+    .filter(r => r.cmei && r.cap > 0)
+    .map(r => ({
+      ...r,
+      ocupacao:     r.cap > 0 ? Math.round(r.matric / r.cap * 100) : 0,
+      totalVagas13: r.vagaI1 + r.vagaI2 + r.vagaI3,
+      totalVagas45: r.vagaI4 + r.vagaI5,
+      totalEspera:  r.esperaI1 + r.esperaI2 + r.esperaI3,
+    }))
 }
 
-const COR_RENDA=["#b91c1c","#f97316","#eab308","#22c55e","#0369a1"]
-const COR_PRESSAO=(p)=>p>=80?"#b91c1c":p>=50?"#f97316":p>=25?"#eab308":"#22c55e"
+/* ── Helpers de display ──────────────────────────────────────────────────── */
+function fmtN(n) { return n.toLocaleString("pt-BR") }
 
-const TooltipCustom=({active,payload,label})=>{
-  if(!active||!payload?.length)return null
-  return(
-    <div style={{background:"#fff",border:`1px solid ${COR_BORDA}`,borderRadius:10,padding:"10px 16px",fontSize:12,boxShadow:"0 4px 12px #2d6a4f22"}}>
-      <div style={{fontWeight:700,color:COR,marginBottom:6}}>{label}</div>
-      {payload.map(p=><div key={p.name} style={{color:p.color}}>● {p.name}: <b>{typeof p.value==="number"?p.value.toLocaleString("pt-BR"):p.value}</b></div>)}
+function corOcupacao(pct) {
+  if (pct >= 100) return VERMELHO
+  if (pct >= 95)  return "#ef4444"
+  if (pct >= 88)  return LARANJA
+  return COR
+}
+
+function corEspera(n) {
+  if (n >= 80)  return VERMELHO
+  if (n >= 40)  return LARANJA
+  if (n >= 10)  return "#ca8a04"
+  return COR
+}
+
+function badgeOcup(pct) {
+  if (pct >= 100) return { label: "LOTADO", bg: "#fee2e2", cor: VERMELHO }
+  if (pct >= 95)  return { label: "CRÍTICO", bg: "#fef2f2", cor: "#ef4444" }
+  if (pct >= 88)  return { label: "ALTO", bg: "#fef9c3", cor: LARANJA }
+  return { label: "OK", bg: "#dcfce7", cor: COR }
+}
+
+/* ── Tooltip ─────────────────────────────────────────────────────────────── */
+const TipCustom = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${COR_BORDA}`, borderRadius: 10, padding: "10px 16px", fontSize: 12, boxShadow: "0 4px 12px #2d6a4f22" }}>
+      <div style={{ fontWeight: 700, color: COR, marginBottom: 6 }}>{label}</div>
+      {payload.map(p => (
+        <div key={p.name} style={{ color: p.color || COR }}>● {p.name}: <b>{fmtN(p.value)}</b></div>
+      ))}
     </div>
   )
 }
 
-function Termometro({pressao,label,espera,matriculados}){
-  const cor=COR_PRESSAO(pressao)
-  const nivel=pressao>=80?"CRÍTICO":pressao>=50?"ALTO":pressao>=25?"MÉDIO":"OK"
-  return(
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"default"}}>
-      <div style={{fontSize:9,color:"#64748b",textAlign:"center",maxWidth:75,lineHeight:1.3}}>{label}</div>
-      <div style={{width:14,height:64,background:"#e5e7eb",borderRadius:7,overflow:"hidden",position:"relative",border:`1px solid ${cor}44`}}>
-        <div style={{position:"absolute",bottom:0,width:"100%",height:`${pressao}%`,background:cor,borderRadius:7,transition:"height 0.8s ease"}}/>
-      </div>
-      <div style={{fontSize:11,fontWeight:800,color:cor}}>{pressao}%</div>
-      <div style={{fontSize:8,color:cor,fontWeight:600}}>{nivel}</div>
-      {matriculados===0&&<div style={{fontSize:8,color:"#94a3b8",textAlign:"center",maxWidth:75}}>sem matric.</div>}
+/* ── Barra de ocupação compacta ──────────────────────────────────────────── */
+function BarraOcup({ pct, height = 8 }) {
+  const cor = corOcupacao(pct)
+  return (
+    <div style={{ background: "#e5e7eb", borderRadius: 99, height, overflow: "hidden" }}>
+      <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: cor, borderRadius: 99 }} />
     </div>
   )
 }
 
-export default function GGOrganizacaoPage(){
-  const [dados,setDados]=useState(null)
-  const [carregando,setCarregando]=useState(true)
-  const [abaAtiva,setAbaAtiva]=useState("espera")
-  const [filtroAtivo,setFiltroAtivo]=useState(null)
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTE PRINCIPAL
+   ═══════════════════════════════════════════════════════════════════════════ */
+export default function GGOrganizacaoPage() {
+  const [dados, setDados]         = useState(null)
+  const [carregando, setCarregando] = useState(true)
+  const [aba, setAba]             = useState("geral")
+  const [buscaPNTP, setBuscaPNTP] = useState("")
+  const [buscaProf, setBuscaProf] = useState("")
+  const [updated, setUpdated]     = useState(null)
 
-  useEffect(()=>{
+  const carregar = () => {
+    setCarregando(true)
     Promise.all([
-      fetch(URL_ESPERA).then(r=>r.text()),
-      fetch(URL_MATRICULADOS).then(r=>r.text()),
-    ]).then(([csvE,csvM])=>{setDados(processarDados(csvE,csvM));setCarregando(false)})
-      .catch(()=>setCarregando(false))
-  },[])
+      fetch(URL_REGULAR).then(r => r.text()),
+      fetch(URL_CRECHE).then(r => r.text()),
+      fetch(URL_PNTP).then(r => r.text()),
+    ])
+      .then(([tR, tC, tP]) => {
+        setDados({
+          regular: parseLacunas(tR),
+          creche:  parseLacunas(tC),
+          pntp:    parsePNTP(tP),
+        })
+        setUpdated(new Date())
+      })
+      .catch(() => setDados(null))
+      .finally(() => setCarregando(false))
+  }
 
-  const handleFiltro=useCallback((tipo,valor)=>{
-    setFiltroAtivo(prev=>prev?.tipo===tipo&&prev?.valor===valor?null:{tipo,valor})
-  },[])
+  useEffect(() => { carregar() }, [])
 
-  const irParaAba=(id)=>{setAbaAtiva(id);setFiltroAtivo(null);window.scrollTo({top:0,behavior:"smooth"})}
-
-  if(carregando)return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f4faf6",fontFamily:"'Segoe UI',sans-serif"}}>
-      <div style={{textAlign:"center",color:COR}}>
-        <div style={{fontSize:48,marginBottom:16}}>⏳</div>
-        <div style={{fontSize:16,fontWeight:600}}>Carregando dados...</div>
-        <div style={{fontSize:12,color:"#94a3b8",marginTop:8}}>Buscando informações do Google Sheets</div>
+  /* ── Loading / Erro ──────────────────────────────────────────────────── */
+  if (carregando) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: COR_CLARA, fontFamily: "'Segoe UI',sans-serif" }}>
+      <div style={{ textAlign: "center", color: COR }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+        <div style={{ fontSize: 16, fontWeight: 600 }}>Carregando dados da rede...</div>
+        <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 8 }}>PNTP + Dimensionamento de professores</div>
+      </div>
+    </div>
+  )
+  if (!dados) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center", color: VERMELHO }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Não foi possível carregar os dados.</div>
+        <button onClick={carregar} style={{ padding: "8px 20px", borderRadius: 20, border: `1px solid ${COR_BORDA}`, background: COR, color: "#fff", cursor: "pointer", fontWeight: 600 }}>Tentar novamente</button>
       </div>
     </div>
   )
 
-  if(!dados)return(
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f4faf6"}}>
-      <div style={{textAlign:"center",color:"#b91c1c"}}><div style={{fontSize:48}}>⚠️</div><div style={{fontSize:16,fontWeight:600,marginTop:12}}>Erro ao carregar dados.</div></div>
+  /* ── Derivados ───────────────────────────────────────────────────────── */
+  const { regular, creche, pntp } = dados
+
+  // PNTP totais
+  const totalCap      = pntp.reduce((s, r) => s + r.cap, 0)
+  const totalMat      = pntp.reduce((s, r) => s + r.matric, 0)
+  const totalVagas13  = pntp.reduce((s, r) => s + r.totalVagas13, 0)
+  const totalVagas45  = pntp.reduce((s, r) => s + r.totalVagas45, 0)
+  const totalEspera   = pntp.reduce((s, r) => s + r.totalEspera, 0)
+  const totalEsperaI1 = pntp.reduce((s, r) => s + r.esperaI1, 0)
+  const totalEsperaI2 = pntp.reduce((s, r) => s + r.esperaI2, 0)
+  const totalEsperaI3 = pntp.reduce((s, r) => s + r.esperaI3, 0)
+  const ocupGeralPct  = Math.round(totalMat / totalCap * 100)
+  const cmeiLotados   = pntp.filter(r => r.ocupacao >= 100).length
+  const cmeiCriticos  = pntp.filter(r => r.ocupacao >= 95).length
+  const gapVagasEspera = totalEspera - totalVagas13
+
+  // Professores
+  const totalProfReg   = regular.reduce((s, r) => s + r.professores, 0)
+  const totalProfCre   = creche.reduce((s, r) => s + r.professores, 0)
+  const totalAulasReg  = regular.reduce((s, r) => s + r.aulas, 0)
+  const totalAulasCre  = creche.reduce((s, r) => s + r.aulas, 0)
+
+  // Mapa de professores por escola (regular + creche combinados)
+  const profMap = {}
+  regular.forEach(r => {
+    if (!profMap[r.escola]) profMap[r.escola] = { reg: 0, cre: 0 }
+    profMap[r.escola].reg = r.professores
+  })
+  creche.forEach(r => {
+    if (!profMap[r.escola]) profMap[r.escola] = { reg: 0, cre: 0 }
+    profMap[r.escola].cre = r.professores
+  })
+  const profCombinado = Object.entries(profMap)
+    .map(([escola, v]) => ({ escola: escola.length > 36 ? escola.slice(0, 36) + "…" : escola, reg: v.reg, cre: v.cre, total: v.reg + v.cre }))
+    .sort((a, b) => b.total - a.total)
+
+  // Filtros
+  const pntpFiltrado = pntp
+    .filter(r => !buscaPNTP || r.cmei.toLowerCase().includes(buscaPNTP.toLowerCase()))
+    .sort((a, b) => b.totalEspera - a.totalEspera)
+
+  const profFiltrado = profCombinado
+    .filter(r => !buscaProf || r.escola.toLowerCase().includes(buscaProf.toLowerCase()))
+
+  // Top 10 para gráficos
+  const top10Espera = [...pntp].sort((a, b) => b.totalEspera - a.totalEspera).slice(0, 10)
+    .map(r => ({ nome: r.cmei.length > 28 ? r.cmei.slice(0, 28) + "…" : r.cmei, espera: r.totalEspera, vagas: r.totalVagas13 }))
+
+  const top10Ocupacao = [...pntp].sort((a, b) => b.ocupacao - a.ocupacao).slice(0, 10)
+    .map(r => ({ nome: r.cmei.length > 28 ? r.cmei.slice(0, 28) + "…" : r.cmei, ocupacao: r.ocupacao, cap: r.cap, matric: r.matric }))
+
+  const top10ProfTotal = profCombinado.slice(0, 10)
+    .map(r => ({ ...r, escola: r.escola.length > 28 ? r.escola.slice(0, 28) + "…" : r.escola }))
+
+  // Dados gráfico espera por tipo (INF)
+  const dadosEsperaTipo = [
+    { inf: "Infantil 1", espera: totalEsperaI1, vagas: pntp.reduce((s, r) => s + r.vagaI1, 0) },
+    { inf: "Infantil 2", espera: totalEsperaI2, vagas: pntp.reduce((s, r) => s + r.vagaI2, 0) },
+    { inf: "Infantil 3", espera: totalEsperaI3, vagas: pntp.reduce((s, r) => s + r.vagaI3, 0) },
+  ]
+
+  // Distribuição de ocupação (histograma)
+  const distOcup = { "< 80%": 0, "80–89%": 0, "90–94%": 0, "95–99%": 0, "100%": 0 }
+  pntp.forEach(r => {
+    if (r.ocupacao >= 100) distOcup["100%"]++
+    else if (r.ocupacao >= 95) distOcup["95–99%"]++
+    else if (r.ocupacao >= 90) distOcup["90–94%"]++
+    else if (r.ocupacao >= 80) distOcup["80–89%"]++
+    else distOcup["< 80%"]++
+  })
+  const dadosDistOcup = Object.entries(distOcup).map(([faixa, qtd]) => ({ faixa, qtd }))
+
+  /* ── Layout helpers ──────────────────────────────────────────────────── */
+  const ABAS = [
+    { id: "geral",    label: "🏠 Visão Geral" },
+    { id: "pntp",     label: "📊 Vagas & Ocupação" },
+    { id: "prof",     label: "👩‍🏫 Dimensionamento" },
+  ]
+
+  const card = (children, extra = {}) => (
+    <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${COR}11`, ...extra }}>
+      {children}
     </div>
   )
 
-  const{totalEspera,totalMatric,comBF,pcdTotal,usaTransporte,gemeos,irmaoCreche,
-    turmasData,rendaData,topBairrosEspera,pressaoBairros,bairrosSemMatriculados,
-    topCmeiPrioridade,topEscolas,porModalidade,pontData,espera}=dados
+  const titulo = (t, s) => (
+    <>
+      <div style={{ fontWeight: 700, fontSize: 14, color: COR, marginBottom: 2 }}>{t}</div>
+      {s && <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 14 }}>{s}</div>}
+    </>
+  )
 
-  const esperaFiltrada=filtroAtivo?espera.filter(r=>{
-    if(filtroAtivo.tipo==="turma")return r[23]?.trim()===filtroAtivo.valor
-    if(filtroAtivo.tipo==="bairro")return r[14]?.trim().toUpperCase()===filtroAtivo.valor
-    return true
-  }):espera
+  const kpi = (icon, valor, label, sub, cor = COR, alerta = false) => (
+    <div style={{ background: "#fff", borderRadius: 14, padding: "16px 18px", boxShadow: `0 2px 12px ${cor}22`, borderLeft: `4px solid ${alerta ? VERMELHO : cor}`, display: "flex", alignItems: "center", gap: 12 }}>
+      <span style={{ fontSize: 26 }}>{icon}</span>
+      <div>
+        <div style={{ fontSize: 22, fontWeight: 900, color: alerta ? VERMELHO : cor }}>{valor}</div>
+        <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>{label}</div>
+        <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 1 }}>{sub}</div>
+      </div>
+    </div>
+  )
 
-  const topBairrosFiltrado=Object.entries(
-    esperaFiltrada.reduce((acc,r)=>{const b=r[14]?.trim().toUpperCase();if(b&&b!=="...")acc[b]=(acc[b]||0)+1;return acc},{})
-  ).map(([bairro,total])=>({bairro:bairro.slice(0,22),bairroFull:bairro,total}))
-    .sort((a,b)=>b.total-a.total).slice(0,12)
+  /* ── Render ──────────────────────────────────────────────────────────── */
+  return (
+    <div style={{ minHeight: "100vh", background: "#f4faf6", fontFamily: "'Segoe UI',sans-serif", color: "#1a3a2a" }}>
+      <Header titulo="GG Organização Escolar" sub="Painel de gestão e estrutura da rede — CMEIs 2026" cor={COR} />
 
-  const turmasFiltrado=Object.entries(
-    esperaFiltrada.reduce((acc,r)=>{const t=r[23]?.trim();if(t)acc[t]=(acc[t]||0)+1;return acc},{})
-  ).map(([turma,total])=>({turma,total})).sort((a,b)=>b.total-a.total)
+      <main style={{ padding: "92px 32px 52px" }}>
 
-  const comBF_f=esperaFiltrada.filter(r=>r[46]?.toUpperCase()==="SIM").length
-  const pcd_f  =esperaFiltrada.filter(r=>r[15]?.toUpperCase()==="SIM").length
-
-  const pizzaModal=Object.entries(porModalidade).map(([name,value],i)=>({name,value,fill:["#2d6a4f","#1d7fc4","#7c3371"][i]}))
-
-  const pctVulneravel=Math.round((rendaData.filter(r=>r.faixa==="Até R$750"||r.faixa==="Sem renda").reduce((s,r)=>s+r.total,0)/totalEspera)*100)
-
-  return(
-    <div style={{minHeight:"100vh",background:"#f4faf6",fontFamily:"'Segoe UI',sans-serif",color:"#1a3a2a"}}>
-      <Header titulo="GG Organização Escolar" sub="Painel de gestão e estrutura da rede" cor={COR}/>
-
-      <main style={{padding:"92px 32px 52px"}}>
-
-        {/* AVISO ESCOPO */}
-        <div style={{background:"#fffbeb",border:"1.5px solid #fcd34d",borderRadius:10,padding:"10px 18px",marginBottom:20,fontSize:12,color:"#92400e"}}>
-          ℹ️ <b>Escopo dos dados:</b> Este painel exibe exclusivamente dados de <b>CMEI/CEI</b>. Dados de Escolas Municipais (EM) e Escolas de Tempo Integral (ETI) não constam nas planilhas disponíveis até o momento.
+        {/* Aviso escopo */}
+        <div style={{ background: "#fffbeb", border: "1.5px solid #fcd34d", borderRadius: 10, padding: "10px 18px", marginBottom: 18, fontSize: 12, color: "#92400e" }}>
+          ℹ️ <b>Escopo atual:</b> Este painel exibe dados exclusivos de <b>CMEI/Creche</b>. Os campos <b>Bairro</b> e <b>TGS</b> serão exibidos automaticamente assim que as planilhas forem preenchidos pela gerência.
         </div>
 
-        {/* ABAS */}
-        <div style={{display:"flex",gap:8,marginBottom:24,flexWrap:"wrap"}}>
-          {[
-            {id:"espera",     label:"👶 Lista de Espera"},
-            {id:"prioridade", label:"🚨 Prioridade & Risco"},
-            {id:"matriculados",label:"📚 Matriculados CMEI"},
-            {id:"cruzamento", label:"🔀 Análise Cruzada"},
-          ].map(a=>(
-            <button key={a.id} onClick={()=>irParaAba(a.id)} style={{
-              padding:"8px 18px",borderRadius:10,border:"none",cursor:"pointer",
-              fontSize:12,fontWeight:600,
-              background:abaAtiva===a.id?COR:"#fff",
-              color:abaAtiva===a.id?"#fff":COR,
-              boxShadow:"0 2px 8px #2d6a4f18",transition:"all 0.2s",
-            }}>{a.label}</button>
-          ))}
-        </div>
-
-        {/* FILTRO ATIVO */}
-        {filtroAtivo&&(
-          <div style={{background:"#fff",border:`2px solid ${COR}`,borderRadius:12,padding:"10px 18px",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontSize:13,color:COR,fontWeight:600}}>
-              🔍 Filtrado: <b>{filtroAtivo.valor}</b> — {esperaFiltrada.length} crianças · {comBF_f} com Bolsa Família · {pcd_f} PCD
-            </span>
-            <button onClick={()=>setFiltroAtivo(null)} style={{background:COR,color:"#fff",border:"none",borderRadius:8,padding:"4px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>✕ Limpar</button>
+        {/* Abas + botão atualizar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            {ABAS.map(a => (
+              <button key={a.id} onClick={() => setAba(a.id)} style={{
+                padding: "8px 20px", borderRadius: 20, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 600, transition: "all 0.2s",
+                background: aba === a.id ? COR : "#fff",
+                color: aba === a.id ? "#fff" : COR,
+                boxShadow: aba === a.id ? `0 2px 8px ${COR}44` : "0 1px 4px #0001",
+              }}>{a.label}</button>
+            ))}
           </div>
-        )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>{updated ? `Atualizado: ${updated.toLocaleTimeString("pt-BR")}` : ""}</span>
+            <button onClick={carregar} style={{ padding: "6px 14px", borderRadius: 20, border: `1px solid ${COR_BORDA}`, background: "#fff", color: COR, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>↻ Atualizar</button>
+          </div>
+        </div>
 
-        {/* ══ ABA: LISTA DE ESPERA ══ */}
-        {abaAtiva==="espera"&&(
-          <>
-            {/* KPIs — 4 cards compactos + 1 botão-link para prioridade */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr) 1fr",gap:14,marginBottom:24,alignItems:"stretch"}}>
-              {[
-                {label:"Na Fila de Espera", valor:totalEspera.toLocaleString("pt-BR"), icon:"👶", variacao:"aguardando vaga em CMEI", cor:COR},
-                {label:"Com Bolsa Família",  valor:comBF.toLocaleString("pt-BR"),       icon:"💚", variacao:`${Math.round(comBF/totalEspera*100)}% das crianças`, cor:"#15803d"},
-                {label:"PCD na Fila",        valor:pcdTotal,                            icon:"♿", variacao:"necessidades especiais",  cor:"#7c3371"},
-                {label:"Irmão já na creche", valor:irmaoCreche,                         icon:"👫", variacao:"critério de prioridade",  cor:"#0369a1"},
-              ].map(k=>(
-                <div key={k.label} style={{background:"#fff",borderRadius:14,padding:"16px 18px",boxShadow:`0 2px 12px ${k.cor}22`,borderLeft:`4px solid ${k.cor}`,display:"flex",alignItems:"center",gap:12}}>
-                  <span style={{fontSize:24}}>{k.icon}</span>
-                  <div>
-                    <div style={{fontSize:24,fontWeight:800,color:k.cor}}>{k.valor}</div>
-                    <div style={{fontSize:10,color:"#64748b",fontWeight:600}}>{k.label}</div>
-                    <div style={{fontSize:9,color:"#94a3b8",marginTop:1}}>{k.variacao}</div>
-                  </div>
-                </div>
-              ))}
-              {/* Botão-link para aba Prioridade */}
-              <button onClick={()=>irParaAba("prioridade")} style={{
-                background:"linear-gradient(135deg,#b91c1c,#ef4444)",
-                borderRadius:14,padding:"16px 18px",border:"none",cursor:"pointer",
-                boxShadow:"0 2px 12px #b91c1c33",display:"flex",flexDirection:"column",
-                alignItems:"center",justifyContent:"center",gap:6,
-              }}>
-                <span style={{fontSize:24}}>🚨</span>
-                <div style={{fontSize:11,fontWeight:700,color:"#fff",textAlign:"center"}}>Ver Mapa de<br/>Risco & Prioridade</div>
-                <div style={{fontSize:10,color:"#fecaca"}}>bairros críticos →</div>
-              </button>
-            </div>
+        {/* ══════════════════════════ VISÃO GERAL ══════════════════════════ */}
+        {aba === "geral" && <>
 
-            {/* Faixa etária + Bairros */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1.5fr",gap:20,marginBottom:24}}>
-              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
-                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Por Faixa Etária</div>
-                <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>💡 Clique para filtrar todos os gráficos</div>
-                <ResponsiveContainer width="100%" height={190}>
-                  <BarChart data={turmasFiltrado} barCategoryGap="30%" onClick={d=>d?.activeLabel&&handleFiltro("turma",d.activeLabel)}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
-                    <XAxis dataKey="turma" tick={{fontSize:11,fill:"#334155"}}/>
-                    <YAxis tick={{fontSize:10,fill:"#64748b"}}/>
-                    <Tooltip formatter={(v)=>[v,"crianças"]}/>
-                    <Bar dataKey="total" name="Crianças" radius={[6,6,0,0]} cursor="pointer" animationDuration={600}>
-                      {turmasFiltrado.map(e=><Cell key={e.turma} fill={filtroAtivo?.valor===e.turma?"#0369a1":COR}/>)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+            {kpi("🏫", fmtN(pntp.length), "CMEIs na rede", "Unidades com dados 2026", COR)}
+            {kpi("👶", fmtN(totalMat), "Crianças matriculadas", `${ocupGeralPct}% da capacidade instalada`, COR)}
+            {kpi("🪑", fmtN(totalCap), "Capacidade total", `${totalCap - totalMat} vagas de folga geral`, AZUL)}
+            {kpi("⚠️", fmtN(totalEspera), "Na lista de espera", "INF 1 ao 3 — aguardando convocação", VERMELHO, true)}
+          </div>
 
-              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
-                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Bairros com Mais Crianças na Espera</div>
-                <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>💡 Clique para filtrar por bairro</div>
-                <ResponsiveContainer width="100%" height={190}>
-                  <BarChart data={topBairrosFiltrado} layout="vertical" barCategoryGap="15%"
-                    onClick={d=>d?.activeLabel&&handleFiltro("bairro",d.activeLabel.toUpperCase())}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false}/>
-                    <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}}/>
-                    <YAxis dataKey="bairro" type="category" tick={{fontSize:9,fill:"#334155"}} width={130}/>
-                    <Tooltip formatter={(v)=>[v,"crianças"]}/>
-                    <Bar dataKey="total" name="Na espera" radius={[0,4,4,0]} cursor="pointer" animationDuration={800}>
-                      {topBairrosFiltrado.map(e=><Cell key={e.bairro} fill={filtroAtivo?.valor===e.bairroFull?"#0369a1":COR}/>)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+            {kpi("🔴", cmeiLotados, "CMEIs 100% lotados", "Sem nenhuma vaga disponível", VERMELHO, cmeiLotados > 0)}
+            {kpi("🟠", cmeiCriticos, "CMEIs acima de 95%", "Capacidade criticamente alta", LARANJA)}
+            {kpi("📋", fmtN(totalVagas13), "Vagas disponíveis INF 1–3", `Gap: ${fmtN(gapVagasEspera)} crianças sem vaga`, gapVagasEspera > 0 ? VERMELHO : COR, gapVagasEspera > 0)}
+            {kpi("👩‍🏫", fmtN(totalProfReg + totalProfCre), "Professores necessários", `${totalProfReg} Regular + ${totalProfCre} Creche`, "#7c3371")}
+          </div>
 
-            {/* Renda (menor) + Pontuação + Novos CMEIs */}
-            <div style={{display:"grid",gridTemplateColumns:"1.2fr 1fr 0.8fr",gap:20}}>
-
-              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
-                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Renda Familiar das Famílias na Fila</div>
-                <div style={{fontSize:11,color:"#94a3b8",marginBottom:12}}>
-                  <b style={{color:"#b91c1c"}}>{pctVulneravel}%</b> têm renda até R$750 — maior grupo em vulnerabilidade
-                </div>
-                <ResponsiveContainer width="100%" height={150}>
-                  <BarChart data={rendaData} barCategoryGap="20%">
-                    <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
-                    <XAxis dataKey="faixa" tick={{fontSize:9,fill:"#64748b"}} interval={0} angle={-10} textAnchor="end" height={36}/>
-                    <YAxis tick={{fontSize:9,fill:"#64748b"}}/>
-                    <Tooltip formatter={(v)=>[v,"famílias"]}/>
-                    <Bar dataKey="total" name="Famílias" radius={[4,4,0,0]} animationDuration={800}>
-                      {rendaData.map((_,i)=><Cell key={i} fill={COR_RENDA[i]}/>)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
-                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Distribuição de Pontuação</div>
-                <div style={{fontSize:11,color:"#94a3b8",marginBottom:12}}>
-                  Pontuação determina prioridade de chamada (quanto maior, maior prioridade)
-                </div>
-                <ResponsiveContainer width="100%" height={150}>
-                  <BarChart data={pontData} barCategoryGap="15%">
-                    <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
-                    <XAxis dataKey="pts" tick={{fontSize:10,fill:"#64748b"}}/>
-                    <YAxis tick={{fontSize:9,fill:"#64748b"}}/>
-                    <Tooltip formatter={(v)=>[v,"crianças"]}/>
-                    <Bar dataKey="total" name="Crianças" radius={[4,4,0,0]} animationDuration={800}>
-                      {pontData.map((_,i)=><Cell key={i} fill={i>=pontData.length-2?"#15803d":i<=1?"#94a3b8":COR}/>)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
-                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>🏗️ Novos CMEIs 2026</div>
-                <div style={{fontSize:11,color:"#94a3b8",marginBottom:14}}>Fonte: gerência de organização escolar</div>
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {NOVOS_CMEIS_2026.map((nome,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:COR_CLARA,borderRadius:8,padding:"8px 12px"}}>
-                      <span style={{fontSize:14}}>📍</span>
-                      <span style={{fontSize:12,fontWeight:600,color:"#1a3a2a"}}>{nome}</span>
-                    </div>
-                  ))}
+          {/* Alerta principal */}
+          {gapVagasEspera > 0 && (
+            <div style={{ background: "#fef2f2", border: `2px solid ${VERMELHO}`, borderRadius: 14, padding: "16px 22px", marginBottom: 24, display: "flex", gap: 16, alignItems: "center" }}>
+              <span style={{ fontSize: 32 }}>🚨</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: VERMELHO, marginBottom: 4 }}>Atenção — Demanda reprimida em Infantil 1 ao 3</div>
+                <div style={{ fontSize: 13, color: "#7f1d1d", lineHeight: 1.6 }}>
+                  Há <b>{fmtN(totalEspera)} crianças</b> aguardando vaga nos anos iniciais (INF 1–3), mas apenas <b>{fmtN(totalVagas13)} vagas disponíveis</b> para as próximas convocações — um déficit de <b>{fmtN(gapVagasEspera)} crianças</b> sem perspectiva imediata de vaga. Os 5 CMEIs com maior fila de espera somados têm <b>{top10Espera.slice(0, 5).reduce((s, r) => s + r.espera, 0)} crianças</b> aguardando.
                 </div>
               </div>
             </div>
-          </>
-        )}
+          )}
 
-        {/* ══ ABA: PRIORIDADE & RISCO ══ */}
-        {abaAtiva==="prioridade"&&(
-          <>
-            <div style={{background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:12,padding:"14px 20px",marginBottom:24,display:"flex",gap:12,alignItems:"flex-start"}}>
-              <span style={{fontSize:22}}>🚨</span>
-              <div style={{fontSize:13,color:"#7f1d1d"}}>
-                <b>Atenção:</b> os dados abaixo identificam as situações mais críticas — CMEIs com maior concentração de crianças vulneráveis e bairros com maior pressão por vagas. <b>O termômetro mostra o % de crianças na espera em relação ao total do bairro</b> (espera + matriculados morando lá).
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+            {card(<>
+              {titulo("Lista de Espera × Vagas por Ano Inicial", "Comparativo INF 1, 2 e 3 — total da rede")}
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={dadosEsperaTipo} barGap={6} barCategoryGap="30%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} />
+                  <XAxis dataKey="inf" tick={{ fontSize: 11, fill: "#64748b" }} />
+                  <YAxis tick={{ fontSize: 10, fill: "#64748b" }} />
+                  <Tooltip content={<TipCustom />} />
+                  <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="espera" name="Na espera"         fill={VERMELHO} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="vagas"  name="Vagas disponíveis" fill={COR}      radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+              <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>
+                * INF 4 e INF 5 não são anos iniciais — vagas disponíveis: INF4={fmtN(pntp.reduce((s,r)=>s+r.vagaI4,0))}, INF5={fmtN(pntp.reduce((s,r)=>s+r.vagaI5,0))}
               </div>
-            </div>
+            </>)}
 
-            {/* Termômetros */}
-            <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
-              <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Pressão de Demanda por Bairro</div>
-              <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>
-                Proporção de crianças na espera vs. matriculadas por bairro de residência. Bairros com 100% e "sem matric." indicam que nenhuma criança desse bairro consta na planilha de matriculados — pode haver CMEI próximo em outro bairro.
-              </div>
-              <div style={{display:"flex",gap:16,flexWrap:"wrap",justifyContent:"center"}}>
-                {pressaoBairros.map(b=><Termometro key={b.bairro} pressao={b.pressao} label={b.bairro} espera={b.espera} matriculados={b.matriculados}/>)}
-              </div>
-              <div style={{display:"flex",gap:20,justifyContent:"center",marginTop:20,flexWrap:"wrap"}}>
-                {[["🔴 CRÍTICO","≥80%","#b91c1c"],["🟠 ALTO","50–79%","#f97316"],["🟡 MÉDIO","25–49%","#eab308"],["🟢 OK","<25%","#22c55e"]].map(([n,v,c])=>(
-                  <span key={n} style={{fontSize:11,color:c,fontWeight:600}}>{n} {v}</span>
+            {card(<>
+              {titulo("Distribuição de Ocupação — CMEIs", "Quantos CMEIs estão em cada faixa de ocupação")}
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={dadosDistOcup} barCategoryGap="25%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} />
+                  <XAxis dataKey="faixa" tick={{ fontSize: 10, fill: "#64748b" }} />
+                  <YAxis tick={{ fontSize: 10, fill: "#64748b" }} />
+                  <Tooltip formatter={v => [v, "CMEIs"]} />
+                  <Bar dataKey="qtd" name="CMEIs" radius={[4, 4, 0, 0]}>
+                    {dadosDistOcup.map((d, i) => (
+                      <Cell key={i} fill={d.faixa === "100%" ? VERMELHO : d.faixa === "95–99%" ? "#ef4444" : d.faixa === "90–94%" ? LARANJA : d.faixa === "80–89%" ? "#ca8a04" : COR} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 10, flexWrap: "wrap" }}>
+                {[["🔴 Lotado/Crítico (≥95%)", VERMELHO], ["🟠 Alto (90–94%)", LARANJA], ["🟢 Abaixo 90%", COR]].map(([l, c]) => (
+                  <span key={l} style={{ color: c, fontWeight: 600 }}>{l}</span>
                 ))}
               </div>
-            </div>
+            </>)}
+          </div>
 
-            {/* Tabela prioridade CMEI */}
-            <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
-              <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>CMEIs: Fila, Vulnerabilidade e Faixa Etária</div>
-              <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>
-                Baseado nas 1ª opções de creche das famílias na fila — CMEIs destacados em amarelo têm ≥70% de famílias do Bolsa Família ou crianças PCD
-              </div>
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",minWidth:700}}>
-                  <thead>
-                    <tr style={{borderBottom:`2px solid ${COR_CLARA}`}}>
-                      {["CMEI (1ª opção da família)","FILA","BOLSA FAM.","PCD","INF. 1","INF. 2","INF. 3","MATRIC. ATUAL"].map(h=>(
-                        <th key={h} style={{textAlign:"left",padding:"8px 10px",fontSize:9,color:"#94a3b8",fontWeight:700,letterSpacing:0.8,whiteSpace:"nowrap"}}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topCmeiPrioridade.map((d,i)=>{
-                      const urgente=d.pctBF>=70||d.pcd>0
-                      return(
-                        <tr key={i} style={{borderBottom:`1px solid ${COR_CLARA}`,background:urgente?"#fefce8":i%2===0?"#fff":"#f8fbff"}}>
-                          <td style={{padding:"10px",fontSize:11,color:"#334155",fontWeight:500}}>
-                            {urgente&&<span style={{marginRight:4}}>⚠️</span>}{d.cmei}
-                          </td>
-                          <td style={{padding:"10px",textAlign:"center"}}>
-                            <span style={{background:COR_CLARA,color:COR,borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:800}}>{d.total}</span>
-                          </td>
-                          <td style={{padding:"10px",textAlign:"center"}}>
-                            <div style={{fontSize:12,fontWeight:700,color:"#15803d"}}>{d.bf}</div>
-                            <div style={{fontSize:9,color:"#94a3b8"}}>{d.pctBF}% da fila</div>
-                          </td>
-                          <td style={{padding:"10px",textAlign:"center"}}>
-                            {d.pcd>0?<span style={{background:"#fdf4ff",color:"#7c3371",borderRadius:20,padding:"2px 8px",fontSize:11,fontWeight:700}}>{d.pcd}</span>:<span style={{color:"#94a3b8"}}>—</span>}
-                          </td>
-                          <td style={{padding:"10px",textAlign:"center",fontSize:12,color:"#0369a1",fontWeight:600}}>{d.inf1||"—"}</td>
-                          <td style={{padding:"10px",textAlign:"center",fontSize:12,color:"#1d7fc4",fontWeight:600}}>{d.inf2||"—"}</td>
-                          <td style={{padding:"10px",textAlign:"center",fontSize:12,color:"#38bdf8",fontWeight:600}}>{d.inf3||"—"}</td>
-                          <td style={{padding:"10px",textAlign:"center"}}>
-                            {d.capacidade>0
-                              ?<span style={{background:"#dcfce7",color:"#15803d",borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:600}}>{d.capacidade}</span>
-                              :<span style={{color:"#94a3b8",fontSize:11}}>—</span>}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* ══ ABA: MATRICULADOS ══ */}
-        {abaAtiva==="matriculados"&&(
-          <>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,marginBottom:24}}>
-              {[
-                {label:"Crianças Matriculadas",valor:totalMatric.toLocaleString("pt-BR"),icon:"📚",variacao:"em 35 CMEIs",cor:COR},
-                {label:"Usa Transp. Público",  valor:usaTransporte,icon:"🚌",variacao:`${Math.round(usaTransporte/totalMatric*100)}% do total`,cor:"#0369a1"},
-                {label:"Zona Rural",           valor:590,icon:"🌱",variacao:"crianças da área rural",cor:"#7c3371"},
-                {label:"Zona Urbana",          valor:"5.990",icon:"🏙️",variacao:"crianças da área urbana",cor:"#c0521a"},
-              ].map(k=>(
-                <div key={k.label} style={{background:"#fff",borderRadius:14,padding:"18px 20px",boxShadow:`0 2px 12px ${k.cor}22`,borderLeft:`4px solid ${k.cor}`,display:"flex",alignItems:"center",gap:14}}>
-                  <span style={{fontSize:28}}>{k.icon}</span>
-                  <div>
-                    <div style={{fontSize:26,fontWeight:800,color:k.cor}}>{k.valor}</div>
-                    <div style={{fontSize:11,color:"#64748b",fontWeight:600}}>{k.label}</div>
-                    <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{k.variacao}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr",gap:20}}>
-              <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
-                <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Top CMEIs por Matrículas</div>
-                <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Maiores unidades em número de alunos</div>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={topEscolas} layout="vertical" barCategoryGap="15%">
-                    <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false}/>
-                    <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}}/>
-                    <YAxis dataKey="escola" type="category" tick={{fontSize:9,fill:"#334155"}} width={175}/>
-                    <Tooltip formatter={(v)=>[v,"matriculados"]}/>
-                    <Bar dataKey="total" name="Matriculados" radius={[0,6,6,0]} animationDuration={800}>
-                      {topEscolas.map((_,i)=><Cell key={i} fill={i<3?COR:COR+"99"}/>)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div style={{display:"flex",flexDirection:"column",gap:20}}>
-                <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
-                  <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:8}}>Por Modalidade</div>
-                  <ResponsiveContainer width="100%" height={160}>
-                    <PieChart>
-                      <Pie data={pizzaModal} cx="50%" cy="45%" innerRadius={40} outerRadius={65} paddingAngle={3} dataKey="value" animationBegin={0} animationDuration={800}>
-                        {pizzaModal.map((e,i)=><Cell key={i} fill={e.fill}/>)}
-                      </Pie>
-                      <Tooltip formatter={(v)=>[v.toLocaleString("pt-BR"),"alunos"]}/>
-                      <Legend iconType="circle" iconSize={10} wrapperStyle={{fontSize:10}}/>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div style={{background:"#fff",borderRadius:16,padding:20,boxShadow:`0 2px 12px ${COR}11`,textAlign:"center"}}>
-                  <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:8}}>Transporte Escolar</div>
-                  <div style={{fontSize:36,fontWeight:900,color:"#0369a1"}}>{Math.round(usaTransporte/totalMatric*100)}%</div>
-                  <div style={{fontSize:12,color:"#64748b"}}>{usaTransporte.toLocaleString("pt-BR")} crianças usam transporte público</div>
-                  <div style={{background:"#e0f2fe",borderRadius:8,height:10,overflow:"hidden",marginTop:12}}>
-                    <div style={{width:`${Math.round(usaTransporte/totalMatric*100)}%`,height:"100%",background:"#0369a1",borderRadius:8}}/>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* ══ ABA: CRUZAMENTO ══ */}
-        {abaAtiva==="cruzamento"&&(
-          <>
-            <div style={{background:"#f0f9ff",border:"1.5px solid #7dd3fc",borderRadius:12,padding:"14px 20px",marginBottom:24,display:"flex",gap:12,alignItems:"flex-start"}}>
-              <span style={{fontSize:22}}>💡</span>
-              <div style={{fontSize:13,color:"#0369a1"}}>
-                Esta aba cruza a fila de espera com os matriculados. CMEIs com <b>0 matriculados</b> podem ser unidades ainda sem turmas formadas na planilha disponível. Os dados de bairro comparam crianças <b>morando</b> no mesmo bairro — uma criança pode morar no bairro X e frequentar CMEI no bairro Y.
-              </div>
-            </div>
-
-            <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`,marginBottom:24}}>
-              <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>CMEIs: Fila de Espera vs. Matriculados Atuais</div>
-              <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Barra laranja maior que a verde = demanda supera capacidade atual naquele CMEI</div>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={topCmeiPrioridade} layout="vertical" barGap={4} barCategoryGap="20%">
-                  <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false}/>
-                  <XAxis type="number" tick={{fontSize:10,fill:"#64748b"}}/>
-                  <YAxis dataKey="cmei" type="category" tick={{fontSize:9,fill:"#334155"}} width={200}/>
-                  <Tooltip content={<TooltipCustom/>}/>
-                  <Legend iconType="circle" iconSize={10} wrapperStyle={{fontSize:11}}/>
-                  <Bar dataKey="capacidade" name="Matriculados" fill={COR}     radius={[0,4,4,0]} animationDuration={600}/>
-                  <Bar dataKey="total"      name="Na fila"      fill="#f97316" radius={[0,4,4,0]} animationDuration={800}/>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div style={{background:"#fff",borderRadius:16,padding:24,boxShadow:`0 2px 12px ${COR}11`}}>
-              <div style={{fontWeight:700,fontSize:14,color:COR,marginBottom:2}}>Bairros: Fila vs. Matriculados (por bairro de residência)</div>
-              <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Bairros onde há mais crianças esperando do que matriculadas — indica maior pressão local por vagas</div>
+          {/* Top 10 espera + professores resumo */}
+          <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 20 }}>
+            {card(<>
+              {titulo("Top 10 CMEIs — Maior Lista de Espera INF 1–3", "Vagas disponíveis vs crianças aguardando por unidade")}
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={pressaoBairros} barGap={4} barCategoryGap="20%">
-                  <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA}/>
-                  <XAxis dataKey="bairro" tick={{fontSize:9,fill:"#64748b"}} interval={0} angle={-20} textAnchor="end" height={55}/>
-                  <YAxis tick={{fontSize:10,fill:"#64748b"}}/>
-                  <Tooltip content={<TooltipCustom/>}/>
-                  <Legend iconType="circle" iconSize={10} wrapperStyle={{fontSize:11}}/>
-                  <Bar dataKey="matriculados" name="Matriculados" fill={COR}     radius={[4,4,0,0]} animationDuration={600}/>
-                  <Bar dataKey="espera"       name="Na fila"      fill="#f97316" radius={[4,4,0,0]} animationDuration={800}/>
+                <BarChart data={top10Espera} layout="vertical" barGap={3} barCategoryGap="18%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }} />
+                  <YAxis dataKey="nome" type="category" tick={{ fontSize: 9, fill: "#334155" }} width={175} />
+                  <Tooltip content={<TipCustom />} />
+                  <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="espera" name="Na espera"         fill={VERMELHO} radius={[0, 5, 5, 0]} />
+                  <Bar dataKey="vagas"  name="Vagas disponíveis" fill={COR}      radius={[0, 5, 5, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-          </>
-        )}
+            </>)}
 
+            {card(<>
+              {titulo("Dimensionamento — Resumo Executivo", "Professores necessários para completar o quadro em 2026")}
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
+                {[
+                  { label: "Prof. I — Infantil Regular", total: totalProfReg, aulas: totalAulasReg, cor: COR, desc: `${regular.length} CMEIs com lacuna — ${totalAulasReg} aulas descobertas (÷20 = professores)` },
+                  { label: "Prof. I — Creche (CMEI)", total: totalProfCre, aulas: totalAulasCre, cor: "#7c3371", desc: `${creche.length} CMEIs com lacuna — ${totalAulasCre} aulas descobertas` },
+                  { label: "TOTAL — Toda a rede", total: totalProfReg + totalProfCre, aulas: totalAulasReg + totalAulasCre, cor: VERMELHO, desc: "Professores necessários para suprir todas as lacunas" },
+                ].map(k => (
+                  <div key={k.label} style={{ background: COR_CLARA, borderRadius: 12, padding: "14px 16px", borderLeft: `4px solid ${k.cor}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: k.cor }}>{k.label}</div>
+                      <div style={{ fontSize: 28, fontWeight: 900, color: k.cor }}>{k.total}</div>
+                    </div>
+                    <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>{k.desc}</div>
+                  </div>
+                ))}
+                <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.6, background: "#f8fafc", borderRadius: 8, padding: "10px 12px" }}>
+                  <b>Como foi calculado:</b> cada escola tem um número de aulas descobertas. Como um professor I tem 20 aulas semanais, divide-se o total de aulas por 20 para obter a quantidade de professores necessários.
+                </div>
+              </div>
+            </>)}
+          </div>
+        </>}
+
+        {/* ══════════════════════════ VAGAS & OCUPAÇÃO ═════════════════════ */}
+        {aba === "pntp" && <>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 24 }}>
+            {kpi("🏫", fmtN(pntp.length), "CMEIs", "Unidades 2026", COR)}
+            {kpi("👶", fmtN(totalMat), "Matriculados", `${ocupGeralPct}% da capacidade`, COR)}
+            {kpi("🪑", fmtN(totalCap - totalMat), "Vagas livres (geral)", `De ${fmtN(totalCap)} de capacidade`, AZUL)}
+            {kpi("📋", fmtN(totalVagas13), "Vagas INF 1–3 convocação", "Para as próximas chamadas", COR)}
+            {kpi("⚠️", fmtN(totalEspera), "Na lista de espera", `INF1=${totalEsperaI1} INF2=${totalEsperaI2} INF3=${totalEsperaI3}`, VERMELHO, true)}
+          </div>
+
+          {/* Gráfico top 10 ocupação */}
+          {card(<>
+            {titulo("Top 10 CMEIs por Taxa de Ocupação", "Unidades com maior pressão sobre capacidade instalada")}
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={top10Ocupacao} layout="vertical" barCategoryGap="18%">
+                <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }} domain={[0, 110]} tickFormatter={v => `${v}%`} />
+                <YAxis dataKey="nome" type="category" tick={{ fontSize: 9, fill: "#334155" }} width={175} />
+                <Tooltip formatter={(v, n) => [n === "ocupacao" ? `${v}%` : fmtN(v), n === "ocupacao" ? "Ocupação" : n]} />
+                <Bar dataKey="ocupacao" name="Ocupação %" radius={[0, 6, 6, 0]}>
+                  {top10Ocupacao.map((d, i) => <Cell key={i} fill={corOcupacao(d.ocupacao)} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </>, { marginBottom: 24 })}
+
+          {/* Tabela completa PNTP */}
+          {card(<>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: COR }}>Detalhamento por CMEI — PNTP 2026</div>
+                <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                  {pntpFiltrado.length} unidade(s) · Ordenado por lista de espera decrescente · * = informação adicional na planilha
+                </div>
+                <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>
+                  🔲 Colunas <b>Bairro</b> e <b>TGS</b> serão preenchidas automaticamente quando disponíveis na planilha
+                </div>
+              </div>
+              <input
+                placeholder="🔍 Buscar CMEI..."
+                value={buscaPNTP}
+                onChange={e => setBuscaPNTP(e.target.value)}
+                style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${COR_BORDA}`, fontSize: 12, outline: "none", width: 200, color: "#334155" }}
+              />
+            </div>
+            <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 520 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+                <thead style={{ position: "sticky", top: 0, background: "#fff", zIndex: 2 }}>
+                  <tr style={{ borderBottom: `2px solid ${COR_CLARA}` }}>
+                    {[
+                      ["CMEI", "left", 200],
+                      ["TGS", "center", 60],
+                      ["BAIRRO", "left", 90],
+                      ["CAP.", "right", 55],
+                      ["MATRÍCULAS", "right", 80],
+                      ["OCUPAÇÃO", "center", 90],
+                      ["VAGAS I1", "right", 60],
+                      ["VAGAS I2", "right", 60],
+                      ["VAGAS I3", "right", 60],
+                      ["VAGAS I4", "right", 55],
+                      ["VAGAS I5", "right", 55],
+                      ["ESP. I1", "right", 60],
+                      ["ESP. I2", "right", 60],
+                      ["ESP. I3", "right", 60],
+                      ["TOTAL ESPERA", "right", 80],
+                    ].map(([h, align, w]) => (
+                      <th key={h} style={{ textAlign: align, padding: "6px 8px", fontSize: 9, color: "#94a3b8", fontWeight: 700, letterSpacing: 0.6, whiteSpace: "nowrap", minWidth: w }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pntpFiltrado.map((r, i) => {
+                    const badge = badgeOcup(r.ocupacao)
+                    return (
+                      <tr key={i} style={{ borderBottom: `1px solid ${COR_CLARA}`, background: i % 2 === 0 ? "#fff" : "#fafff8" }}>
+                        <td style={{ padding: "8px 8px", fontSize: 11, fontWeight: 600, color: "#334155", whiteSpace: "nowrap" }}>
+                          {r.asterisco && <span title="Informação adicional na planilha" style={{ marginRight: 4, color: LARANJA }}>*</span>}
+                          {r.cmei}
+                        </td>
+                        {/* TGS — exibe quando preenchido */}
+                        <td style={{ padding: "8px 8px", textAlign: "center", fontSize: 10, color: r.tgs ? "#334155" : "#d1d5db" }}>
+                          {r.tgs || "—"}
+                        </td>
+                        {/* BAIRRO — exibe quando preenchido */}
+                        <td style={{ padding: "8px 8px", fontSize: 10, color: r.bairro ? "#334155" : "#d1d5db" }}>
+                          {r.bairro || "—"}
+                        </td>
+                        <td style={{ padding: "8px 8px", fontSize: 11, textAlign: "right", color: "#334155" }}>{fmtN(r.cap)}</td>
+                        <td style={{ padding: "8px 8px", fontSize: 11, textAlign: "right", fontWeight: 600, color: "#334155" }}>{fmtN(r.matric)}</td>
+                        <td style={{ padding: "8px 8px", textAlign: "center" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <span style={{ background: badge.bg, color: badge.cor, borderRadius: 10, padding: "2px 8px", fontSize: 10, fontWeight: 700, display: "inline-block" }}>
+                              {r.ocupacao}% {badge.label}
+                            </span>
+                            <BarraOcup pct={r.ocupacao} height={5} />
+                          </div>
+                        </td>
+                        {[r.vagaI1, r.vagaI2, r.vagaI3, r.vagaI4, r.vagaI5].map((v, j) => (
+                          <td key={j} style={{ padding: "8px 8px", fontSize: 11, textAlign: "right", color: v > 0 ? "#15803d" : "#94a3b8", fontWeight: v > 0 ? 700 : 400 }}>{v > 0 ? v : "–"}</td>
+                        ))}
+                        {[r.esperaI1, r.esperaI2, r.esperaI3].map((v, j) => (
+                          <td key={j} style={{ padding: "8px 8px", fontSize: 11, textAlign: "right", color: corEspera(v), fontWeight: v > 0 ? 700 : 400 }}>{v > 0 ? v : "–"}</td>
+                        ))}
+                        <td style={{ padding: "8px 8px", fontSize: 12, textAlign: "right", fontWeight: 800, color: corEspera(r.totalEspera) }}>
+                          {r.totalEspera > 0 ? fmtN(r.totalEspera) : "–"}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                {/* Linha de totais */}
+                <tfoot style={{ position: "sticky", bottom: 0, background: COR_CLARA }}>
+                  <tr style={{ borderTop: `2px solid ${COR_BORDA}` }}>
+                    <td style={{ padding: "8px 8px", fontSize: 11, fontWeight: 800, color: COR }} colSpan={3}>TOTAL GERAL</td>
+                    <td style={{ padding: "8px 8px", fontSize: 11, textAlign: "right", fontWeight: 800, color: COR }}>{fmtN(totalCap)}</td>
+                    <td style={{ padding: "8px 8px", fontSize: 11, textAlign: "right", fontWeight: 800, color: COR }}>{fmtN(totalMat)}</td>
+                    <td style={{ padding: "8px 8px", textAlign: "center", fontSize: 11, fontWeight: 800, color: COR }}>{ocupGeralPct}%</td>
+                    {[pntp.reduce((s,r)=>s+r.vagaI1,0), pntp.reduce((s,r)=>s+r.vagaI2,0), pntp.reduce((s,r)=>s+r.vagaI3,0), pntp.reduce((s,r)=>s+r.vagaI4,0), pntp.reduce((s,r)=>s+r.vagaI5,0)].map((v, i) => (
+                      <td key={i} style={{ padding: "8px 8px", fontSize: 11, textAlign: "right", fontWeight: 700, color: COR }}>{fmtN(v)}</td>
+                    ))}
+                    {[totalEsperaI1, totalEsperaI2, totalEsperaI3].map((v, i) => (
+                      <td key={i} style={{ padding: "8px 8px", fontSize: 11, textAlign: "right", fontWeight: 700, color: VERMELHO }}>{fmtN(v)}</td>
+                    ))}
+                    <td style={{ padding: "8px 8px", fontSize: 12, textAlign: "right", fontWeight: 900, color: VERMELHO }}>{fmtN(totalEspera)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </>, { marginBottom: 0 })}
+        </>}
+
+        {/* ══════════════════════════ DIMENSIONAMENTO ══════════════════════ */}
+        {aba === "prof" && <>
+
+          {/* KPIs */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+            {kpi("📚", regular.length, "CMEIs com lacuna — Infantil Regular", "Educação infantil (Pré 1–3)", COR)}
+            {kpi("👶", creche.length, "CMEIs com lacuna — Creche", "Educação creche (0–3 anos)", "#7c3371")}
+            {kpi("👩‍🏫", fmtN(totalProfReg), "Prof. necessários — Regular", `${fmtN(totalAulasReg)} aulas descobertas ÷ 20`, COR)}
+            {kpi("👩‍🏫", fmtN(totalProfCre), "Prof. necessários — Creche", `${fmtN(totalAulasCre)} aulas descobertas ÷ 20`, "#7c3371")}
+          </div>
+
+          {/* Destaque total */}
+          <div style={{ background: "#fff0f9", border: `2px solid #d946ef`, borderRadius: 14, padding: "16px 24px", marginBottom: 24, display: "flex", gap: 20, alignItems: "center" }}>
+            <div style={{ fontSize: 48, fontWeight: 900, color: "#86198f", minWidth: 80, textAlign: "center" }}>{fmtN(totalProfReg + totalProfCre)}</div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 16, color: "#86198f" }}>professores necessários para suprir todas as lacunas da rede em 2026</div>
+              <div style={{ fontSize: 12, color: "#a21caf", marginTop: 4 }}>
+                {fmtN(totalProfReg)} para Infantil Regular ({regular.length} CMEIs) · {fmtN(totalProfCre)} para Creche ({creche.length} CMEIs) · {fmtN(totalAulasReg + totalAulasCre)} aulas totais descobertas
+              </div>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
+                <b>Metodologia:</b> Cada professor I tem carga de 20 aulas semanais. Aulas descobertas ÷ 20 = professores necessários.
+              </div>
+            </div>
+          </div>
+
+          {/* Gráfico combinado top 10 + gráfico por tipo */}
+          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 20, marginBottom: 24 }}>
+            {card(<>
+              {titulo("Top 10 CMEIs — Maior Necessidade de Professores (Regular + Creche)", "Soma das lacunas dos dois tipos de vínculo")}
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={top10ProfTotal} layout="vertical" barGap={3} barCategoryGap="16%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }} />
+                  <YAxis dataKey="escola" type="category" tick={{ fontSize: 9, fill: "#334155" }} width={190} />
+                  <Tooltip content={<TipCustom />} />
+                  <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="reg" name="Infantil Regular" fill={COR}      stackId="a" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="cre" name="Creche"           fill="#7c3371"  stackId="a" radius={[0, 5, 5, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </>)}
+
+            {card(<>
+              {titulo("Lacuna por Tipo", "Distribuição de necessidades entre Regular e Creche")}
+              <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 12 }}>
+                {[
+                  { tipo: "Infantil Regular", total: totalProfReg, aulas: totalAulasReg, cmeis: regular.length, cor: COR, desc: "Turmas de Pré I, II, III e Jardim" },
+                  { tipo: "Creche (CMEI)", total: totalProfCre, aulas: totalAulasCre, cmeis: creche.length, cor: "#7c3371", desc: "Turmas Berçário, Maternal I, II e III" },
+                ].map(k => (
+                  <div key={k.tipo} style={{ background: COR_CLARA, borderRadius: 12, padding: "16px 18px", borderLeft: `4px solid ${k.cor}` }}>
+                    <div style={{ fontWeight: 700, color: k.cor, fontSize: 13, marginBottom: 6 }}>{k.tipo}</div>
+                    <div style={{ fontSize: 10, color: "#64748b", marginBottom: 10 }}>{k.desc} · {k.cmeis} CMEIs com lacuna</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 28, fontWeight: 900, color: k.cor }}>{k.total}</div>
+                        <div style={{ fontSize: 9, color: "#64748b" }}>professores</div>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: 28, fontWeight: 900, color: k.cor }}>{fmtN(k.aulas)}</div>
+                        <div style={{ fontSize: 9, color: "#64748b" }}>aulas descobertas</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>)}
+          </div>
+
+          {/* Tabela completa combinada */}
+          {card(<>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: COR }}>Detalhamento por CMEI — Professores necessários</div>
+                <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                  {profFiltrado.length} unidade(s) com lacuna · ordenado por necessidade total decrescente
+                </div>
+              </div>
+              <input
+                placeholder="🔍 Buscar CMEI..."
+                value={buscaProf}
+                onChange={e => setBuscaProf(e.target.value)}
+                style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${COR_BORDA}`, fontSize: 12, outline: "none", width: 200, color: "#334155" }}
+              />
+            </div>
+            <div style={{ overflowY: "auto", maxHeight: 460 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead style={{ position: "sticky", top: 0, background: "#fff", zIndex: 2 }}>
+                  <tr style={{ borderBottom: `2px solid ${COR_CLARA}` }}>
+                    {[
+                      ["CMEI", "left"],
+                      ["AULAS REG.", "right"],
+                      ["PROF. REGULAR", "center"],
+                      ["AULAS CRECHE", "right"],
+                      ["PROF. CRECHE", "center"],
+                      ["TOTAL PROF.", "center"],
+                    ].map(([h, align]) => (
+                      <th key={h} style={{ textAlign: align, padding: "6px 12px", fontSize: 10, color: "#94a3b8", fontWeight: 700, letterSpacing: 0.6, whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {profFiltrado.map((r, i) => {
+                    // Busca aulas originais
+                    const rRaw = regular.find(x => x.escola === r.escola.replace("…","")) || {}
+                    const cRaw = creche.find(x => x.escola === r.escola.replace("…","")) || {}
+                    return (
+                      <tr key={i} style={{ borderBottom: `1px solid ${COR_CLARA}`, background: i % 2 === 0 ? "#fff" : "#fafff8" }}>
+                        <td style={{ padding: "9px 12px", fontSize: 11, fontWeight: 600, color: "#334155" }}>{r.escola}</td>
+                        <td style={{ padding: "9px 12px", fontSize: 11, textAlign: "right", color: r.reg > 0 ? "#64748b" : "#d1d5db" }}>{r.reg > 0 ? fmtN(rRaw.aulas || r.reg * 20) : "—"}</td>
+                        <td style={{ padding: "9px 12px", textAlign: "center" }}>
+                          {r.reg > 0 ? (
+                            <span style={{ background: COR_CLARA, color: COR, borderRadius: 20, padding: "2px 12px", fontSize: 12, fontWeight: 800 }}>{r.reg}</span>
+                          ) : <span style={{ color: "#d1d5db" }}>—</span>}
+                        </td>
+                        <td style={{ padding: "9px 12px", fontSize: 11, textAlign: "right", color: r.cre > 0 ? "#64748b" : "#d1d5db" }}>{r.cre > 0 ? fmtN(cRaw.aulas || r.cre * 20) : "—"}</td>
+                        <td style={{ padding: "9px 12px", textAlign: "center" }}>
+                          {r.cre > 0 ? (
+                            <span style={{ background: "#fdf4ff", color: "#7c3371", borderRadius: 20, padding: "2px 12px", fontSize: 12, fontWeight: 800 }}>{r.cre}</span>
+                          ) : <span style={{ color: "#d1d5db" }}>—</span>}
+                        </td>
+                        <td style={{ padding: "9px 12px", textAlign: "center" }}>
+                          <span style={{ background: r.total >= 15 ? "#fee2e2" : r.total >= 8 ? "#fef9c3" : "#dcfce7", color: r.total >= 15 ? VERMELHO : r.total >= 8 ? LARANJA : COR, borderRadius: 20, padding: "3px 14px", fontSize: 13, fontWeight: 900 }}>{r.total}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot style={{ position: "sticky", bottom: 0, background: COR_CLARA }}>
+                  <tr style={{ borderTop: `2px solid ${COR_BORDA}` }}>
+                    <td style={{ padding: "9px 12px", fontWeight: 800, fontSize: 11, color: COR }}>TOTAL GERAL</td>
+                    <td style={{ padding: "9px 12px", fontSize: 11, textAlign: "right", fontWeight: 700, color: COR }}>{fmtN(totalAulasReg)}</td>
+                    <td style={{ padding: "9px 12px", textAlign: "center", fontWeight: 900, fontSize: 12, color: COR }}>{fmtN(totalProfReg)}</td>
+                    <td style={{ padding: "9px 12px", fontSize: 11, textAlign: "right", fontWeight: 700, color: "#7c3371" }}>{fmtN(totalAulasCre)}</td>
+                    <td style={{ padding: "9px 12px", textAlign: "center", fontWeight: 900, fontSize: 12, color: "#7c3371" }}>{fmtN(totalProfCre)}</td>
+                    <td style={{ padding: "9px 12px", textAlign: "center" }}>
+                      <span style={{ background: "#fee2e2", color: VERMELHO, borderRadius: 20, padding: "3px 14px", fontSize: 14, fontWeight: 900 }}>{fmtN(totalProfReg + totalProfCre)}</span>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </>, { marginBottom: 0 })}
+        </>}
+
+        <div style={{ textAlign: "center", fontSize: 10, color: "#94a3b8", paddingTop: 18 }}>
+          Fonte: SEDUC Caruaru — PNTP Creches 2026 · Dimensionamento Prof. I Regular e Creche 2026 · dados carregados automaticamente do Google Sheets
+        </div>
       </main>
     </div>
   )
