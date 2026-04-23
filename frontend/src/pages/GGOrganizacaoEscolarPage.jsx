@@ -224,15 +224,15 @@ export default function GGOrganizacaoPage() {
   const profFiltrado = profCombinado
     .filter(r => !buscaProf || r.escola.toLowerCase().includes(buscaProf.toLowerCase()))
 
-  // Top 10 para gráficos
-  const top10Espera = [...pntp].sort((a, b) => b.totalEspera - a.totalEspera).slice(0, 10)
-    .map(r => ({ nome: r.cmei.length > 28 ? r.cmei.slice(0, 28) + "…" : r.cmei, espera: r.totalEspera, vagas: r.totalVagas13 }))
+  // Todos os CMEIs para os gráficos (com scroll)
+  const todosEspera = [...pntp].sort((a, b) => b.totalEspera - a.totalEspera)
+    .map(r => ({ nome: r.cmei.length > 32 ? r.cmei.slice(0, 32) + "…" : r.cmei, espera: r.totalEspera, vagas: r.totalVagas13 }))
 
-  const top10Ocupacao = [...pntp].sort((a, b) => b.ocupacao - a.ocupacao).slice(0, 10)
-    .map(r => ({ nome: r.cmei.length > 28 ? r.cmei.slice(0, 28) + "…" : r.cmei, ocupacao: r.ocupacao, cap: r.cap, matric: r.matric }))
+  const todosOcupacao = [...pntp].sort((a, b) => b.ocupacao - a.ocupacao)
+    .map(r => ({ nome: r.cmei.length > 32 ? r.cmei.slice(0, 32) + "…" : r.cmei, ocupacao: r.ocupacao, cap: r.cap, matric: r.matric }))
 
-  const top10ProfTotal = profCombinado.slice(0, 10)
-    .map(r => ({ ...r, escola: r.escola.length > 28 ? r.escola.slice(0, 28) + "…" : r.escola }))
+  const todosProf = profCombinado
+    .map(r => ({ ...r, escola: r.escola.length > 32 ? r.escola.slice(0, 32) + "…" : r.escola }))
 
   // Dados gráfico espera por tipo (INF)
   const dadosEsperaTipo = [
@@ -338,7 +338,7 @@ export default function GGOrganizacaoPage() {
               <div>
                 <div style={{ fontWeight: 800, fontSize: 15, color: VERMELHO, marginBottom: 4 }}>Atenção — Demanda reprimida em Infantil 1 ao 3</div>
                 <div style={{ fontSize: 13, color: "#7f1d1d", lineHeight: 1.6 }}>
-                  Há <b>{fmtN(totalEspera)} crianças</b> aguardando vaga nos anos iniciais (INF 1–3), mas apenas <b>{fmtN(totalVagas13)} vagas disponíveis</b> para as próximas convocações — um déficit de <b>{fmtN(gapVagasEspera)} crianças</b> sem perspectiva imediata de vaga. Os 5 CMEIs com maior fila de espera somados têm <b>{top10Espera.slice(0, 5).reduce((s, r) => s + r.espera, 0)} crianças</b> aguardando.
+                  Há <b>{fmtN(totalEspera)} crianças</b> aguardando vaga nos anos iniciais (INF 1–3), mas apenas <b>{fmtN(totalVagas13)} vagas disponíveis</b> para as próximas convocações — um déficit de <b>{fmtN(gapVagasEspera)} crianças</b> sem perspectiva imediata de vaga. Os 5 CMEIs com maior fila de espera somados têm <b>{todosEspera.slice(0, 5).reduce((s, r) => s + r.espera, 0)} crianças</b> aguardando.
                 </div>
               </div>
             </div>
@@ -389,18 +389,22 @@ export default function GGOrganizacaoPage() {
           {/* Top 10 espera + professores resumo */}
           <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 20 }}>
             {card(<>
-              {titulo("Top 10 CMEIs — Maior Lista de Espera INF 1–3", "Vagas disponíveis vs crianças aguardando por unidade")}
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={top10Espera} layout="vertical" barGap={3} barCategoryGap="18%">
-                  <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }} />
-                  <YAxis dataKey="nome" type="category" tick={{ fontSize: 9, fill: "#334155" }} width={175} />
-                  <Tooltip content={<TipCustom />} />
-                  <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="espera" name="Na espera"         fill={VERMELHO} radius={[0, 5, 5, 0]} />
-                  <Bar dataKey="vagas"  name="Vagas disponíveis" fill={COR}      radius={[0, 5, 5, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {titulo("CMEIs — Lista de Espera INF 1–3 (todos)", "Vagas disponíveis vs crianças aguardando · ordenado por espera decrescente")}
+              <div style={{ overflowY: "auto", maxHeight: 320 }}>
+                <div style={{ height: todosEspera.length * 32 + 20 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={todosEspera} layout="vertical" barGap={3} barCategoryGap="22%">
+                      <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }} />
+                      <YAxis dataKey="nome" type="category" tick={{ fontSize: 9, fill: "#334155" }} width={185} />
+                      <Tooltip content={<TipCustom />} />
+                      <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey="espera" name="Na espera"         fill={VERMELHO} radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="vagas"  name="Vagas disponíveis" fill={COR}      radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             </>)}
 
             {card(<>
@@ -438,20 +442,24 @@ export default function GGOrganizacaoPage() {
             {kpi("⚠️", fmtN(totalEspera), "Na lista de espera", `INF1=${totalEsperaI1} INF2=${totalEsperaI2} INF3=${totalEsperaI3}`, VERMELHO, true)}
           </div>
 
-          {/* Gráfico top 10 ocupação */}
+          {/* Gráfico todos CMEIs por ocupação */}
           {card(<>
-            {titulo("Top 10 CMEIs por Taxa de Ocupação", "Unidades com maior pressão sobre capacidade instalada")}
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={top10Ocupacao} layout="vertical" barCategoryGap="18%">
-                <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }} domain={[0, 110]} tickFormatter={v => `${v}%`} />
-                <YAxis dataKey="nome" type="category" tick={{ fontSize: 9, fill: "#334155" }} width={175} />
-                <Tooltip formatter={(v, n) => [n === "ocupacao" ? `${v}%` : fmtN(v), n === "ocupacao" ? "Ocupação" : n]} />
-                <Bar dataKey="ocupacao" name="Ocupação %" radius={[0, 6, 6, 0]}>
-                  {top10Ocupacao.map((d, i) => <Cell key={i} fill={corOcupacao(d.ocupacao)} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {titulo("CMEIs por Taxa de Ocupação (todos)", "Unidades com maior pressão sobre capacidade instalada · ordenado decrescente")}
+            <div style={{ overflowY: "auto", maxHeight: 320 }}>
+              <div style={{ height: todosOcupacao.length * 32 + 20 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={todosOcupacao} layout="vertical" barCategoryGap="22%">
+                    <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }} domain={[0, 110]} tickFormatter={v => `${v}%`} />
+                    <YAxis dataKey="nome" type="category" tick={{ fontSize: 9, fill: "#334155" }} width={185} />
+                    <Tooltip formatter={(v, n) => [n === "ocupacao" ? `${v}%` : fmtN(v), n === "ocupacao" ? "Ocupação" : n]} />
+                    <Bar dataKey="ocupacao" name="Ocupação %" radius={[0, 4, 4, 0]}>
+                      {todosOcupacao.map((d, i) => <Cell key={i} fill={corOcupacao(d.ocupacao)} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </>, { marginBottom: 24 })}
 
           {/* Tabela completa PNTP */}
@@ -587,18 +595,22 @@ export default function GGOrganizacaoPage() {
           {/* Gráfico combinado top 10 + gráfico por tipo */}
           <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 20, marginBottom: 24 }}>
             {card(<>
-              {titulo("Top 10 CMEIs — Maior Necessidade de Professores (Regular + Creche)", "Soma das lacunas dos dois tipos de vínculo")}
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={top10ProfTotal} layout="vertical" barGap={3} barCategoryGap="16%">
-                  <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }} />
-                  <YAxis dataKey="escola" type="category" tick={{ fontSize: 9, fill: "#334155" }} width={190} />
-                  <Tooltip content={<TipCustom />} />
-                  <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="reg" name="Infantil Regular" fill={COR}      stackId="a" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="cre" name="Creche"           fill="#7c3371"  stackId="a" radius={[0, 5, 5, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {titulo("CMEIs — Necessidade de Professores (todos)", "Soma das lacunas Regular + Creche · ordenado decrescente")}
+              <div style={{ overflowY: "auto", maxHeight: 320 }}>
+                <div style={{ height: todosProf.length * 32 + 20 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={todosProf} layout="vertical" barGap={3} barCategoryGap="22%">
+                      <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false} />
+                      <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }} />
+                      <YAxis dataKey="escola" type="category" tick={{ fontSize: 9, fill: "#334155" }} width={195} />
+                      <Tooltip content={<TipCustom />} />
+                      <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey="reg" name="Infantil Regular" fill={COR}     stackId="a" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="cre" name="Creche"           fill="#7c3371" stackId="a" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             </>)}
 
             {card(<>
