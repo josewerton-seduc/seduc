@@ -11,9 +11,11 @@ const VERMELHO   = "#b91c1c"
 const LARANJA    = "#d97706"
 const AZUL       = "#0369a1"
 
-const URL_REGULAR = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpGK8KG3Qk1vG1Dq3VW9oE3hko3cLnVycX2gcKjSZ86CmO0xe_lhPs-1ojOAtzvuXkxiuR5qxT7qqC/pub?gid=1965629032&single=true&output=csv"
-const URL_CRECHE  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpGK8KG3Qk1vG1Dq3VW9oE3hko3cLnVycX2gcKjSZ86CmO0xe_lhPs-1ojOAtzvuXkxiuR5qxT7qqC/pub?gid=2002999141&single=true&output=csv"
-const URL_PNTP    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQOTHk0W9GxuLy5ldKLn10HiInUhOtFpGHxXELP6DCeHWIwA51OSVXMtYPK1a4Kh05IVDJCi5kIO2tt/pub?gid=574473705&single=true&output=csv"
+const URL_REGULAR  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpGK8KG3Qk1vG1Dq3VW9oE3hko3cLnVycX2gcKjSZ86CmO0xe_lhPs-1ojOAtzvuXkxiuR5qxT7qqC/pub?gid=1965629032&single=true&output=csv"
+const URL_CRECHE   = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpGK8KG3Qk1vG1Dq3VW9oE3hko3cLnVycX2gcKjSZ86CmO0xe_lhPs-1ojOAtzvuXkxiuR5qxT7qqC/pub?gid=2002999141&single=true&output=csv"
+const URL_PNTP     = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQOTHk0W9GxuLy5ldKLn10HiInUhOtFpGHxXELP6DCeHWIwA51OSVXMtYPK1a4Kh05IVDJCi5kIO2tt/pub?gid=574473705&single=true&output=csv"
+const URL_PROF2    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpGK8KG3Qk1vG1Dq3VW9oE3hko3cLnVycX2gcKjSZ86CmO0xe_lhPs-1ojOAtzvuXkxiuR5qxT7qqC/pub?gid=1574200592&single=true&output=csv"
+const URL_PROF2TMP = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpGK8KG3Qk1vG1Dq3VW9oE3hko3cLnVycX2gcKjSZ86CmO0xe_lhPs-1ojOAtzvuXkxiuR5qxT7qqC/pub?gid=1977440084&single=true&output=csv"
 
 function parseCSV(text) {
   const rows = []; let row = [], field = "", inQ = false
@@ -43,6 +45,33 @@ function parseLacunas(text) {
     .filter(r => r[0] && r[0].toLowerCase() !== "total geral" && r[0] !== "UNIDADE ESCOLAR")
     .map(r => ({ escola: r[0].trim(), aulas: num(r[1]), professores: num(r[2]) }))
     .filter(r => r.professores > 0)
+}
+
+// Parser Prof II — estrutura: linha 0 = grupo, linha 1 = componentes, linha 2+ = dados
+const PROF2_VAZIO = { componentes: [], escolas: [], totalPorComponente: {}, totalAulas: 0 }
+function parseProfII(text) {
+  try {
+    const rows = parseCSV(text)
+    if (!rows || rows.length < 3) return PROF2_VAZIO
+    const componentes = rows[1].slice(1, -1).map(c => c.trim()).filter(Boolean)
+    if (componentes.length === 0) return PROF2_VAZIO
+    const escolas = rows.slice(2).filter(r => r[0]?.trim() && r[0].trim().toLowerCase() !== "total geral")
+    return {
+      componentes,
+      escolas: escolas.map(r => ({
+        escola: r[0].trim(),
+        porComponente: Object.fromEntries(componentes.map((c, i) => [c, num(r[i + 1])])),
+        total: num(r[r.length - 1]),
+      })),
+      totalPorComponente: Object.fromEntries(
+        componentes.map((c, i) => [c, escolas.reduce((s, r) => s + num(r[i + 1]), 0)])
+      ),
+      totalAulas: escolas.reduce((s, r) => s + num(r[r.length - 1]), 0),
+    }
+  } catch(e) {
+    console.warn("parseProfII falhou:", e)
+    return PROF2_VAZIO
+  }
 }
 
 function parsePNTP(text) {
@@ -138,12 +167,16 @@ export default function GGOrganizacaoPage() {
       fetch(URL_REGULAR).then(r => r.text()),
       fetch(URL_CRECHE).then(r => r.text()),
       fetch(URL_PNTP).then(r => r.text()),
+      fetch(URL_PROF2).then(r => r.text()).catch(() => ""),
+      fetch(URL_PROF2TMP).then(r => r.text()).catch(() => ""),
     ])
-      .then(([tR, tC, tP]) => {
+      .then(([tR, tC, tP, tP2, tP2T]) => {
         setDados({
-          regular: parseLacunas(tR),
-          creche:  parseLacunas(tC),
-          pntp:    parsePNTP(tP),
+          regular:  parseLacunas(tR),
+          creche:   parseLacunas(tC),
+          pntp:     parsePNTP(tP),
+          prof2:    parseProfII(tP2),
+          prof2tmp: parseProfII(tP2T),
         })
         setUpdated(new Date())
       })
@@ -172,7 +205,7 @@ export default function GGOrganizacaoPage() {
     </div>
   )
 
-  const { regular, creche, pntp } = dados
+  const { regular, creche, pntp, prof2, prof2tmp } = dados
 
   const totalCap      = pntp.reduce((s, r) => s + r.cap, 0)
   const totalMat      = pntp.reduce((s, r) => s + r.matric, 0)
@@ -183,7 +216,6 @@ export default function GGOrganizacaoPage() {
   const totalEsperaI2 = pntp.reduce((s, r) => s + r.esperaI2, 0)
   const totalEsperaI3 = pntp.reduce((s, r) => s + r.esperaI3, 0)
   const ocupGeralPct  = Math.floor(totalMat / totalCap * 100)
-  // CORREÇÃO: usa r.lotado (matric >= cap) em vez de r.ocupacao >= 100
   const cmeiLotados   = pntp.filter(r => r.lotado).length
   const cmeiCriticos  = pntp.filter(r => !r.lotado && r.ocupacao >= 95).length
   const gapVagasEspera = totalEspera - totalVagas13
@@ -192,6 +224,23 @@ export default function GGOrganizacaoPage() {
   const totalProfCre  = creche.reduce((s, r) => s + r.professores, 0)
   const totalAulasReg = regular.reduce((s, r) => s + r.aulas, 0)
   const totalAulasCre = creche.reduce((s, r) => s + r.aulas, 0)
+
+  // Prof II — derivações
+  const totalAulasP2    = prof2.totalAulas       // 551 (efetivos)
+  const totalAulasP2Tmp = prof2tmp.totalAulas    // 181 (temporários)
+  // Mínimo teórico: cada Prof II tem 26 aulas/semana
+  // Não representa a distribuição real (conflito de horários)
+  const minTeoP2    = Math.ceil(totalAulasP2 / 26)
+  const minTeoP2Tmp = Math.ceil(totalAulasP2Tmp / 26)
+  // Componentes combinados (efetivos + temp) para o gráfico
+  const todosComponentes = [...new Set([...prof2.componentes, ...prof2tmp.componentes])]
+  const dadosComponentes = todosComponentes.map(c => ({
+    componente: c.length > 18 ? c.slice(0,18)+"…" : c,
+    nomeCompleto: c,
+    efetivo: prof2.totalPorComponente[c] || 0,
+    temporario: prof2tmp.totalPorComponente[c] || 0,
+    total: (prof2.totalPorComponente[c] || 0) + (prof2tmp.totalPorComponente[c] || 0),
+  })).sort((a, b) => b.total - a.total)
 
   const profMap = {}
   regular.forEach(r => {
@@ -632,6 +681,188 @@ export default function GGOrganizacaoPage() {
               </table>
             </div>
           </>)}
+
+          {/* ── PROFESSOR II ── */}
+          <div style={{ marginTop: 32 }}>
+          {!(prof2.totalAulas > 0 || prof2tmp.totalAulas > 0) &&
+            <div style={{ background: "#fffbeb", border: "1.5px solid #fcd34d", borderRadius: 12, padding: "16px 20px", fontSize: 12, color: "#92400e" }}>
+              ⏳ <b>Professor II:</b> Publique as abas "LACUNAS PROFESSOR II — PLAN" e "LACUNAS PROFESSOR II TEMPORÁRIAS — PLAN" na web para os dados aparecerem aqui.
+            </div>
+          }
+          {(prof2.totalAulas > 0 || prof2tmp.totalAulas > 0) &&
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 16, color: AZUL, marginBottom: 4 }}>📚 Professor II — Ensino Fundamental</div>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 20, lineHeight: 1.6, background: "#eff6ff", borderRadius: 10, padding: "10px 16px", border: "1px solid #bfdbfe" }}>
+              ⚠️ <b>Importante:</b> Os números abaixo mostram <b>aulas descobertas por disciplina</b>, não professores contratados. Como cada professor tem 26 aulas semanais e pode lecionar mais de uma disciplina, <b>não é possível calcular a quantidade exata de professores</b> sem conhecer os horários de cada escola. O mínimo teórico (÷26) é uma estimativa de referência apenas.
+            </div>
+
+            {/* KPIs Prof II */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 24 }}>
+              {[
+                { label: "Escolas c/ lacuna — Efetivos", valor: prof2.escolas.length, sub: `${fmtN(totalAulasP2)} aulas descobertas`, cor: AZUL, icon: "🏫" },
+                { label: "Mín. teórico Efetivos (÷26)", valor: minTeoP2, sub: "estimativa sem considerar horários", cor: AZUL, icon: "👩‍🏫" },
+                { label: "Escolas c/ lacuna — Temporários", valor: prof2tmp.escolas.length, sub: `${fmtN(totalAulasP2Tmp)} aulas descobertas`, cor: "#0284c7", icon: "🏫" },
+                { label: "Mín. teórico Temporários (÷26)", valor: minTeoP2Tmp, sub: "estimativa sem considerar horários", cor: "#0284c7", icon: "👩‍🏫" },
+              ].map(k => (
+                <div key={k.label} style={{ background: "#fff", borderRadius: 14, padding: "16px 18px", boxShadow: `0 2px 12px ${k.cor}22`, borderLeft: `4px solid ${k.cor}`, display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 24 }}>{k.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: k.cor }}>{k.valor}</div>
+                    <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700 }}>{k.label}</div>
+                    <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 1 }}>{k.sub}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Gráfico aulas por disciplina + mapa de calor */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+
+              {/* Gráfico por disciplina */}
+              {card(<>
+                <div style={{ fontWeight: 700, fontSize: 14, color: AZUL, marginBottom: 2 }}>Aulas Descobertas por Disciplina</div>
+                <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 16 }}>Efetivos + temporários · ordenado por maior lacuna</div>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={dadosComponentes} layout="vertical" barGap={3} barCategoryGap="20%">
+                    <CartesianGrid strokeDasharray="3 3" stroke={COR_CLARA} horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 9, fill: "#64748b" }} />
+                    <YAxis dataKey="componente" type="category" tick={{ fontSize: 9, fill: "#334155" }} width={120} />
+                    <Tooltip content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      const d = dadosComponentes.find(x => x.componente === label || x.nomeCompleto === label)
+                      return (
+                        <div style={{ background: "#fff", border: `1px solid #bfdbfe`, borderRadius: 10, padding: "10px 14px", fontSize: 11 }}>
+                          <div style={{ fontWeight: 700, color: AZUL, marginBottom: 6 }}>{d?.nomeCompleto || label}</div>
+                          {payload.map(p => <div key={p.name} style={{ color: p.fill }}>● {p.name}: <b>{p.value} aulas</b></div>)}
+                          <div style={{ borderTop: "1px solid #e2e8f0", marginTop: 6, paddingTop: 6, color: "#475569", fontWeight: 700 }}>Total: {d?.total} aulas</div>
+                        </div>
+                      )
+                    }} />
+                    <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="efetivo"    name="Efetivos"    fill={AZUL}    stackId="a" radius={[0,0,0,0]} />
+                    <Bar dataKey="temporario" name="Temporários" fill="#7dd3fc" stackId="a" radius={[0,4,4,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </>)}
+
+              {/* Totais por tipo */}
+              {card(<>
+                <div style={{ fontWeight: 700, fontSize: 14, color: AZUL, marginBottom: 2 }}>Resumo — Efetivos vs Temporários</div>
+                <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 16 }}>Total de aulas descobertas por vínculo</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {[
+                    { tipo: "Efetivos", aulas: totalAulasP2, escolas: prof2.escolas.length, min: minTeoP2, cor: AZUL, bg: "#eff6ff" },
+                    { tipo: "Temporários", aulas: totalAulasP2Tmp, escolas: prof2tmp.escolas.length, min: minTeoP2Tmp, cor: "#0284c7", bg: "#f0f9ff" },
+                  ].map(k => (
+                    <div key={k.tipo} style={{ background: k.bg, borderRadius: 12, padding: "14px 18px", borderLeft: `4px solid ${k.cor}` }}>
+                      <div style={{ fontWeight: 700, color: k.cor, marginBottom: 8 }}>Prof II — {k.tipo}</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center" }}>
+                        <div><div style={{ fontSize: 24, fontWeight: 900, color: k.cor }}>{k.escolas}</div><div style={{ fontSize: 9, color: "#64748b" }}>escolas</div></div>
+                        <div><div style={{ fontSize: 24, fontWeight: 900, color: k.cor }}>{fmtN(k.aulas)}</div><div style={{ fontSize: 9, color: "#64748b" }}>aulas descobertas</div></div>
+                        <div><div style={{ fontSize: 24, fontWeight: 900, color: k.cor }}>≥{k.min}</div><div style={{ fontSize: 9, color: "#64748b" }}>mín. teórico ÷26</div></div>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 11, color: "#94a3b8", background: "#f8fafc", borderRadius: 8, padding: "10px 12px", lineHeight: 1.6 }}>
+                    <b>Total combinado:</b> {fmtN(totalAulasP2 + totalAulasP2Tmp)} aulas · mínimo teórico de ≥{minTeoP2 + minTeoP2Tmp} professores
+                  </div>
+                </div>
+              </>)}
+            </div>
+
+            {/* Mapa de calor: escola × disciplina */}
+            <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: `0 2px 12px ${AZUL}11` }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: AZUL, marginBottom: 2 }}>🗺️ Mapa de Aulas Descobertas — Escola × Disciplina</div>
+              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 4 }}>Cada célula mostra o número de aulas sem professor naquela disciplina. Útil para identificar onde um professor pode cobrir múltiplas disciplinas.</div>
+              <div style={{ fontSize: 11, color: "#64748b", marginBottom: 16, display: "flex", gap: 16, flexWrap: "wrap" }}>
+                <span>🟦 1–20 aulas</span><span style={{ color: "#d97706" }}>🟧 21–40 aulas</span><span style={{ color: "#b91c1c" }}>🟥 41+ aulas</span><span style={{ color: "#94a3b8" }}>— sem lacuna</span>
+              </div>
+
+              {/* Efetivos */}
+              <div style={{ fontWeight: 600, fontSize: 12, color: AZUL, marginBottom: 8 }}>Efetivos ({prof2.escolas.length} escolas)</div>
+              <div style={{ overflowX: "auto", marginBottom: 24 }}>
+                <table style={{ borderCollapse: "collapse", fontSize: 10, minWidth: 700 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid #bfdbfe` }}>
+                      <th style={{ textAlign: "left", padding: "6px 10px", color: "#64748b", fontWeight: 700, minWidth: 180, position: "sticky", left: 0, background: "#fff" }}>ESCOLA</th>
+                      {prof2.componentes.map(c => (
+                        <th key={c} style={{ textAlign: "center", padding: "6px 6px", color: "#64748b", fontWeight: 700, whiteSpace: "nowrap", fontSize: 9, minWidth: 70 }}>{c}</th>
+                      ))}
+                      <th style={{ textAlign: "center", padding: "6px 8px", color: AZUL, fontWeight: 800, minWidth: 60 }}>TOTAL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...prof2.escolas].sort((a,b) => b.total - a.total).map((e, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "6px 10px", fontSize: 10, fontWeight: 600, color: "#334155", whiteSpace: "nowrap", position: "sticky", left: 0, background: i%2===0?"#fff":"#f8faff" }}>{e.escola}</td>
+                        {prof2.componentes.map(c => {
+                          const v = e.porComponente[c] || 0
+                          const bg = v === 0 ? "transparent" : v >= 41 ? "#fee2e2" : v >= 21 ? "#fef9c3" : "#eff6ff"
+                          const cor = v === 0 ? "#d1d5db" : v >= 41 ? VERMELHO : v >= 21 ? LARANJA : AZUL
+                          return (
+                            <td key={c} style={{ textAlign: "center", padding: "5px 6px", background: bg, color: cor, fontWeight: v > 0 ? 700 : 400, borderRadius: v > 0 ? 6 : 0 }}>
+                              {v > 0 ? v : "—"}
+                            </td>
+                          )
+                        })}
+                        <td style={{ textAlign: "center", padding: "6px 8px", fontWeight: 900, color: AZUL, fontSize: 11 }}>{e.total}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ borderTop: `2px solid #bfdbfe`, background: "#eff6ff" }}>
+                      <td style={{ padding: "6px 10px", fontWeight: 800, color: AZUL, fontSize: 10, position: "sticky", left: 0, background: "#eff6ff" }}>TOTAL</td>
+                      {prof2.componentes.map(c => (
+                        <td key={c} style={{ textAlign: "center", padding: "6px 6px", fontWeight: 800, color: AZUL, fontSize: 10 }}>{prof2.totalPorComponente[c] || 0}</td>
+                      ))}
+                      <td style={{ textAlign: "center", padding: "6px 8px", fontWeight: 900, color: AZUL, fontSize: 12 }}>{totalAulasP2}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Temporários */}
+              <div style={{ fontWeight: 600, fontSize: 12, color: "#0284c7", marginBottom: 8 }}>Temporários ({prof2tmp.escolas.length} escolas)</div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ borderCollapse: "collapse", fontSize: 10, minWidth: 600 }}>
+                  <thead>
+                    <tr style={{ borderBottom: `2px solid #bae6fd` }}>
+                      <th style={{ textAlign: "left", padding: "6px 10px", color: "#64748b", fontWeight: 700, minWidth: 180, position: "sticky", left: 0, background: "#fff" }}>ESCOLA</th>
+                      {prof2tmp.componentes.map(c => (
+                        <th key={c} style={{ textAlign: "center", padding: "6px 6px", color: "#64748b", fontWeight: 700, whiteSpace: "nowrap", fontSize: 9, minWidth: 70 }}>{c}</th>
+                      ))}
+                      <th style={{ textAlign: "center", padding: "6px 8px", color: "#0284c7", fontWeight: 800, minWidth: 60 }}>TOTAL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...prof2tmp.escolas].sort((a,b) => b.total - a.total).map((e, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "6px 10px", fontSize: 10, fontWeight: 600, color: "#334155", whiteSpace: "nowrap", position: "sticky", left: 0, background: i%2===0?"#fff":"#f0f9ff" }}>{e.escola}</td>
+                        {prof2tmp.componentes.map(c => {
+                          const v = e.porComponente[c] || 0
+                          const bg = v === 0 ? "transparent" : v >= 41 ? "#fee2e2" : v >= 21 ? "#fef9c3" : "#f0f9ff"
+                          const cor = v === 0 ? "#d1d5db" : v >= 41 ? VERMELHO : v >= 21 ? LARANJA : "#0284c7"
+                          return (
+                            <td key={c} style={{ textAlign: "center", padding: "5px 6px", background: bg, color: cor, fontWeight: v > 0 ? 700 : 400, borderRadius: v > 0 ? 6 : 0 }}>
+                              {v > 0 ? v : "—"}
+                            </td>
+                          )
+                        })}
+                        <td style={{ textAlign: "center", padding: "6px 8px", fontWeight: 900, color: "#0284c7", fontSize: 11 }}>{e.total}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ borderTop: `2px solid #bae6fd`, background: "#f0f9ff" }}>
+                      <td style={{ padding: "6px 10px", fontWeight: 800, color: "#0284c7", fontSize: 10, position: "sticky", left: 0, background: "#f0f9ff" }}>TOTAL</td>
+                      {prof2tmp.componentes.map(c => (
+                        <td key={c} style={{ textAlign: "center", padding: "6px 6px", fontWeight: 800, color: "#0284c7", fontSize: 10 }}>{prof2tmp.totalPorComponente[c] || 0}</td>
+                      ))}
+                      <td style={{ textAlign: "center", padding: "6px 8px", fontWeight: 900, color: "#0284c7", fontSize: 12 }}>{totalAulasP2Tmp}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          }
+          </div>
         </>}
 
         <div style={{ textAlign: "center", fontSize: 10, color: "#94a3b8", paddingTop: 18 }}>
