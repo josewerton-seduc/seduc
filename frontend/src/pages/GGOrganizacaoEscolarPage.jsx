@@ -4,7 +4,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
 } from "recharts"
 
-/* ── Paleta ──────────────────────────────────────────────────────────────── */
 const COR        = "#2d6a4f"
 const COR_CLARA  = "#f0f7f2"
 const COR_BORDA  = "#a8d5b5"
@@ -12,12 +11,10 @@ const VERMELHO   = "#b91c1c"
 const LARANJA    = "#d97706"
 const AZUL       = "#0369a1"
 
-/* ── URLs Google Sheets ──────────────────────────────────────────────────── */
 const URL_REGULAR = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpGK8KG3Qk1vG1Dq3VW9oE3hko3cLnVycX2gcKjSZ86CmO0xe_lhPs-1ojOAtzvuXkxiuR5qxT7qqC/pub?gid=1965629032&single=true&output=csv"
 const URL_CRECHE  = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSpGK8KG3Qk1vG1Dq3VW9oE3hko3cLnVycX2gcKjSZ86CmO0xe_lhPs-1ojOAtzvuXkxiuR5qxT7qqC/pub?gid=2002999141&single=true&output=csv"
 const URL_PNTP    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQOTHk0W9GxuLy5ldKLn10HiInUhOtFpGHxXELP6DCeHWIwA51OSVXMtYPK1a4Kh05IVDJCi5kIO2tt/pub?gid=574473705&single=true&output=csv"
 
-/* ── CSV parser ──────────────────────────────────────────────────────────── */
 function parseCSV(text) {
   const rows = []; let row = [], field = "", inQ = false
   for (let i = 0; i < text.length; i++) {
@@ -40,9 +37,8 @@ function num(s) {
   return isNaN(n) ? 0 : n
 }
 
-/* ── Parsers específicos ─────────────────────────────────────────────────── */
 function parseLacunas(text) {
-  const rows = parseCSV(text).slice(1) // pula cabeçalho
+  const rows = parseCSV(text).slice(1)
   return rows
     .filter(r => r[0] && r[0].toLowerCase() !== "total geral" && r[0] !== "UNIDADE ESCOLAR")
     .map(r => ({ escola: r[0].trim(), aulas: num(r[1]), professores: num(r[2]) }))
@@ -50,13 +46,14 @@ function parseLacunas(text) {
 }
 
 function parsePNTP(text) {
-  // 2 linhas de cabeçalho + dados + última linha TOTAL
-  const rows = parseCSV(text).slice(2)
+  const allRows = parseCSV(text)
+  // pula as 2 linhas de cabeçalho (grupo + subgrupo INF1/INF2...)
+  const rows = allRows.slice(2)
   return rows
     .filter(r => r[2] && r[2].toLowerCase() !== "total" && r[2] !== "CMEI")
     .map(r => ({
-      tgs:       r[0]?.trim() || "",        // a ser preenchido
-      bairro:    r[1]?.trim() || "",        // a ser preenchido
+      tgs:       r[0]?.trim() || "",
+      bairro:    r[1]?.trim() || "",
       cmei:      r[2]?.trim().replace(/\*/g, "").trim(),
       asterisco: r[2]?.includes("*") || false,
       cap:       num(r[3]),
@@ -73,20 +70,22 @@ function parsePNTP(text) {
     .filter(r => r.cmei && r.cap > 0)
     .map(r => ({
       ...r,
-      ocupacao:     r.cap > 0 ? Math.round(r.matric / r.cap * 100) : 0,
+      // CORREÇÃO: usa Math.floor para nunca arredondar pra cima
+      // e "lotado" é determinado por matric >= cap, não por porcentagem
+      ocupacao:     r.cap > 0 ? Math.floor(r.matric / r.cap * 100) : 0,
+      lotado:       r.matric >= r.cap,
       totalVagas13: r.vagaI1 + r.vagaI2 + r.vagaI3,
       totalVagas45: r.vagaI4 + r.vagaI5,
       totalEspera:  r.esperaI1 + r.esperaI2 + r.esperaI3,
     }))
 }
 
-/* ── Helpers de display ──────────────────────────────────────────────────── */
 function fmtN(n) { return n.toLocaleString("pt-BR") }
 
-function corOcupacao(pct) {
-  if (pct >= 100) return VERMELHO
-  if (pct >= 95)  return "#ef4444"
-  if (pct >= 88)  return LARANJA
+function corOcupacao(pct, lotado) {
+  if (lotado) return VERMELHO
+  if (pct >= 95) return "#ef4444"
+  if (pct >= 88) return LARANJA
   return COR
 }
 
@@ -97,14 +96,13 @@ function corEspera(n) {
   return COR
 }
 
-function badgeOcup(pct) {
-  if (pct >= 100) return { label: "LOTADO", bg: "#fee2e2", cor: VERMELHO }
-  if (pct >= 95)  return { label: "CRÍTICO", bg: "#fef2f2", cor: "#ef4444" }
-  if (pct >= 88)  return { label: "ALTO", bg: "#fef9c3", cor: LARANJA }
+function badgeOcup(pct, lotado) {
+  if (lotado)   return { label: "LOTADO",  bg: "#fee2e2", cor: VERMELHO }
+  if (pct >= 95) return { label: "CRÍTICO", bg: "#fef2f2", cor: "#ef4444" }
+  if (pct >= 88) return { label: "ALTO",    bg: "#fef9c3", cor: LARANJA }
   return { label: "OK", bg: "#dcfce7", cor: COR }
 }
 
-/* ── Tooltip ─────────────────────────────────────────────────────────────── */
 const TipCustom = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   return (
@@ -117,9 +115,8 @@ const TipCustom = ({ active, payload, label }) => {
   )
 }
 
-/* ── Barra de ocupação compacta ──────────────────────────────────────────── */
-function BarraOcup({ pct, height = 8 }) {
-  const cor = corOcupacao(pct)
+function BarraOcup({ pct, lotado, height = 8 }) {
+  const cor = corOcupacao(pct, lotado)
   return (
     <div style={{ background: "#e5e7eb", borderRadius: 99, height, overflow: "hidden" }}>
       <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: cor, borderRadius: 99 }} />
@@ -127,16 +124,13 @@ function BarraOcup({ pct, height = 8 }) {
   )
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   COMPONENTE PRINCIPAL
-   ═══════════════════════════════════════════════════════════════════════════ */
 export default function GGOrganizacaoPage() {
-  const [dados, setDados]         = useState(null)
+  const [dados, setDados]           = useState(null)
   const [carregando, setCarregando] = useState(true)
-  const [aba, setAba]             = useState("geral")
-  const [buscaPNTP, setBuscaPNTP] = useState("")
-  const [buscaProf, setBuscaProf] = useState("")
-  const [updated, setUpdated]     = useState(null)
+  const [aba, setAba]               = useState("geral")
+  const [buscaPNTP, setBuscaPNTP]   = useState("")
+  const [buscaProf, setBuscaProf]   = useState("")
+  const [updated, setUpdated]       = useState(null)
 
   const carregar = () => {
     setCarregando(true)
@@ -159,7 +153,6 @@ export default function GGOrganizacaoPage() {
 
   useEffect(() => { carregar() }, [])
 
-  /* ── Loading / Erro ──────────────────────────────────────────────────── */
   if (carregando) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: COR_CLARA, fontFamily: "'Segoe UI',sans-serif" }}>
       <div style={{ textAlign: "center", color: COR }}>
@@ -179,10 +172,8 @@ export default function GGOrganizacaoPage() {
     </div>
   )
 
-  /* ── Derivados ───────────────────────────────────────────────────────── */
   const { regular, creche, pntp } = dados
 
-  // PNTP totais
   const totalCap      = pntp.reduce((s, r) => s + r.cap, 0)
   const totalMat      = pntp.reduce((s, r) => s + r.matric, 0)
   const totalVagas13  = pntp.reduce((s, r) => s + r.totalVagas13, 0)
@@ -191,32 +182,32 @@ export default function GGOrganizacaoPage() {
   const totalEsperaI1 = pntp.reduce((s, r) => s + r.esperaI1, 0)
   const totalEsperaI2 = pntp.reduce((s, r) => s + r.esperaI2, 0)
   const totalEsperaI3 = pntp.reduce((s, r) => s + r.esperaI3, 0)
-  const ocupGeralPct  = Math.round(totalMat / totalCap * 100)
-  const cmeiLotados   = pntp.filter(r => r.ocupacao >= 100).length
-  const cmeiCriticos  = pntp.filter(r => r.ocupacao >= 95).length
+  const ocupGeralPct  = Math.floor(totalMat / totalCap * 100)
+  // CORREÇÃO: usa r.lotado (matric >= cap) em vez de r.ocupacao >= 100
+  const cmeiLotados   = pntp.filter(r => r.lotado).length
+  const cmeiCriticos  = pntp.filter(r => !r.lotado && r.ocupacao >= 95).length
   const gapVagasEspera = totalEspera - totalVagas13
 
-  // Professores
-  const totalProfReg   = regular.reduce((s, r) => s + r.professores, 0)
-  const totalProfCre   = creche.reduce((s, r) => s + r.professores, 0)
-  const totalAulasReg  = regular.reduce((s, r) => s + r.aulas, 0)
-  const totalAulasCre  = creche.reduce((s, r) => s + r.aulas, 0)
+  const totalProfReg  = regular.reduce((s, r) => s + r.professores, 0)
+  const totalProfCre  = creche.reduce((s, r) => s + r.professores, 0)
+  const totalAulasReg = regular.reduce((s, r) => s + r.aulas, 0)
+  const totalAulasCre = creche.reduce((s, r) => s + r.aulas, 0)
 
-  // Mapa de professores por escola (regular + creche combinados)
   const profMap = {}
   regular.forEach(r => {
-    if (!profMap[r.escola]) profMap[r.escola] = { reg: 0, cre: 0 }
+    if (!profMap[r.escola]) profMap[r.escola] = { reg: 0, cre: 0, aulasReg: 0, aulasCre: 0 }
     profMap[r.escola].reg = r.professores
+    profMap[r.escola].aulasReg = r.aulas
   })
   creche.forEach(r => {
-    if (!profMap[r.escola]) profMap[r.escola] = { reg: 0, cre: 0 }
+    if (!profMap[r.escola]) profMap[r.escola] = { reg: 0, cre: 0, aulasReg: 0, aulasCre: 0 }
     profMap[r.escola].cre = r.professores
+    profMap[r.escola].aulasCre = r.aulas
   })
   const profCombinado = Object.entries(profMap)
-    .map(([escola, v]) => ({ escola: escola.length > 36 ? escola.slice(0, 36) + "…" : escola, reg: v.reg, cre: v.cre, total: v.reg + v.cre }))
+    .map(([escola, v]) => ({ escola, reg: v.reg, cre: v.cre, total: v.reg + v.cre, aulasReg: v.aulasReg, aulasCre: v.aulasCre }))
     .sort((a, b) => b.total - a.total)
 
-  // Filtros
   const pntpFiltrado = pntp
     .filter(r => !buscaPNTP || r.cmei.toLowerCase().includes(buscaPNTP.toLowerCase()))
     .sort((a, b) => b.totalEspera - a.totalEspera)
@@ -224,39 +215,35 @@ export default function GGOrganizacaoPage() {
   const profFiltrado = profCombinado
     .filter(r => !buscaProf || r.escola.toLowerCase().includes(buscaProf.toLowerCase()))
 
-  // Todos os CMEIs para os gráficos (com scroll)
   const todosEspera = [...pntp].sort((a, b) => b.totalEspera - a.totalEspera)
     .map(r => ({ nome: r.cmei.length > 32 ? r.cmei.slice(0, 32) + "…" : r.cmei, espera: r.totalEspera, vagas: r.totalVagas13 }))
 
   const todosOcupacao = [...pntp].sort((a, b) => b.ocupacao - a.ocupacao)
-    .map(r => ({ nome: r.cmei.length > 32 ? r.cmei.slice(0, 32) + "…" : r.cmei, ocupacao: r.ocupacao, cap: r.cap, matric: r.matric }))
+    .map(r => ({ nome: r.cmei.length > 32 ? r.cmei.slice(0, 32) + "…" : r.cmei, ocupacao: r.ocupacao, cap: r.cap, matric: r.matric, lotado: r.lotado }))
 
   const todosProf = profCombinado
     .map(r => ({ ...r, escola: r.escola.length > 32 ? r.escola.slice(0, 32) + "…" : r.escola }))
 
-  // Dados gráfico espera por tipo (INF)
   const dadosEsperaTipo = [
     { inf: "Infantil 1", espera: totalEsperaI1, vagas: pntp.reduce((s, r) => s + r.vagaI1, 0) },
     { inf: "Infantil 2", espera: totalEsperaI2, vagas: pntp.reduce((s, r) => s + r.vagaI2, 0) },
     { inf: "Infantil 3", espera: totalEsperaI3, vagas: pntp.reduce((s, r) => s + r.vagaI3, 0) },
   ]
 
-  // Distribuição de ocupação (histograma)
   const distOcup = { "< 80%": 0, "80–89%": 0, "90–94%": 0, "95–99%": 0, "100%": 0 }
   pntp.forEach(r => {
-    if (r.ocupacao >= 100) distOcup["100%"]++
+    if (r.lotado)          distOcup["100%"]++
     else if (r.ocupacao >= 95) distOcup["95–99%"]++
     else if (r.ocupacao >= 90) distOcup["90–94%"]++
     else if (r.ocupacao >= 80) distOcup["80–89%"]++
-    else distOcup["< 80%"]++
+    else                       distOcup["< 80%"]++
   })
   const dadosDistOcup = Object.entries(distOcup).map(([faixa, qtd]) => ({ faixa, qtd }))
 
-  /* ── Layout helpers ──────────────────────────────────────────────────── */
   const ABAS = [
-    { id: "geral",    label: "🏠 Visão Geral" },
-    { id: "pntp",     label: "📊 Vagas & Ocupação" },
-    { id: "prof",     label: "👩‍🏫 Dimensionamento" },
+    { id: "geral", label: "🏠 Visão Geral" },
+    { id: "pntp",  label: "📊 Vagas & Ocupação" },
+    { id: "prof",  label: "👩‍🏫 Dimensionamento" },
   ]
 
   const card = (children, extra = {}) => (
@@ -283,19 +270,15 @@ export default function GGOrganizacaoPage() {
     </div>
   )
 
-  /* ── Render ──────────────────────────────────────────────────────────── */
   return (
     <div style={{ minHeight: "100vh", background: "#f4faf6", fontFamily: "'Segoe UI',sans-serif", color: "#1a3a2a" }}>
       <Header titulo="GG Organização Escolar" sub="Painel de gestão e estrutura da rede — CMEIs 2026" cor={COR} />
-
       <main style={{ padding: "92px 32px 52px" }}>
 
-        {/* Aviso escopo */}
         <div style={{ background: "#fffbeb", border: "1.5px solid #fcd34d", borderRadius: 10, padding: "10px 18px", marginBottom: 18, fontSize: 12, color: "#92400e" }}>
-          ℹ️ <b>Escopo atual:</b> Este painel exibe dados exclusivos de <b>CMEI/Creche</b>. Os campos <b>Bairro</b> e <b>TGS</b> serão exibidos automaticamente assim que as planilhas forem preenchidos pela gerência.
+          ℹ️ <b>Escopo atual:</b> Este painel exibe dados exclusivos de <b>CMEI/Creche</b>. Os campos <b>Bairro</b> e <b>TGS</b> serão exibidos automaticamente assim que as planilhas forem preenchidas pela gerência.
         </div>
 
-        {/* Abas + botão atualizar */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 8 }}>
           <div style={{ display: "flex", gap: 8 }}>
             {ABAS.map(a => (
@@ -314,16 +297,14 @@ export default function GGOrganizacaoPage() {
           </div>
         </div>
 
-        {/* ══════════════════════════ VISÃO GERAL ══════════════════════════ */}
+        {/* ══ VISÃO GERAL ══ */}
         {aba === "geral" && <>
-
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
             {kpi("🏫", fmtN(pntp.length), "CMEIs na rede", "Unidades com dados 2026", COR)}
             {kpi("👶", fmtN(totalMat), "Crianças matriculadas", `${ocupGeralPct}% da capacidade instalada`, COR)}
-            {kpi("🪑", fmtN(totalCap), "Capacidade total", `${totalCap - totalMat} vagas de folga geral`, AZUL)}
+            {kpi("🪑", fmtN(totalCap), "Capacidade total", `${fmtN(totalCap - totalMat)} vagas de folga geral`, AZUL)}
             {kpi("⚠️", fmtN(totalEspera), "Na lista de espera", "INF 1 ao 3 — aguardando convocação", VERMELHO, true)}
           </div>
-
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
             {kpi("🔴", cmeiLotados, "CMEIs 100% lotados", "Sem nenhuma vaga disponível", VERMELHO, cmeiLotados > 0)}
             {kpi("🟠", cmeiCriticos, "CMEIs acima de 95%", "Capacidade criticamente alta", LARANJA)}
@@ -331,14 +312,13 @@ export default function GGOrganizacaoPage() {
             {kpi("👩‍🏫", fmtN(totalProfReg + totalProfCre), "Professores necessários", `${totalProfReg} Regular + ${totalProfCre} Creche`, "#7c3371")}
           </div>
 
-          {/* Alerta principal */}
           {gapVagasEspera > 0 && (
             <div style={{ background: "#fef2f2", border: `2px solid ${VERMELHO}`, borderRadius: 14, padding: "16px 22px", marginBottom: 24, display: "flex", gap: 16, alignItems: "center" }}>
               <span style={{ fontSize: 32 }}>🚨</span>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 15, color: VERMELHO, marginBottom: 4 }}>Atenção — Demanda reprimida em Infantil 1 ao 3</div>
                 <div style={{ fontSize: 13, color: "#7f1d1d", lineHeight: 1.6 }}>
-                  Há <b>{fmtN(totalEspera)} crianças</b> aguardando vaga nos anos iniciais (INF 1–3), mas apenas <b>{fmtN(totalVagas13)} vagas disponíveis</b> para as próximas convocações — um déficit de <b>{fmtN(gapVagasEspera)} crianças</b> sem perspectiva imediata de vaga. Os 5 CMEIs com maior fila de espera somados têm <b>{todosEspera.slice(0, 5).reduce((s, r) => s + r.espera, 0)} crianças</b> aguardando.
+                  Há <b>{fmtN(totalEspera)} crianças</b> aguardando vaga nos anos iniciais (INF 1–3), mas apenas <b>{fmtN(totalVagas13)} vagas disponíveis</b> para as próximas convocações — um déficit de <b>{fmtN(gapVagasEspera)} crianças</b> sem perspectiva imediata de vaga.
                 </div>
               </div>
             </div>
@@ -362,7 +342,6 @@ export default function GGOrganizacaoPage() {
                 * INF 4 e INF 5 não são anos iniciais — vagas disponíveis: INF4={fmtN(pntp.reduce((s,r)=>s+r.vagaI4,0))}, INF5={fmtN(pntp.reduce((s,r)=>s+r.vagaI5,0))}
               </div>
             </>)}
-
             {card(<>
               {titulo("Distribuição de Ocupação — CMEIs", "Quantos CMEIs estão em cada faixa de ocupação")}
               <ResponsiveContainer width="100%" height={220}>
@@ -379,14 +358,13 @@ export default function GGOrganizacaoPage() {
                 </BarChart>
               </ResponsiveContainer>
               <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 10, flexWrap: "wrap" }}>
-                {[["🔴 Lotado/Crítico (≥95%)", VERMELHO], ["🟠 Alto (90–94%)", LARANJA], ["🟢 Abaixo 90%", COR]].map(([l, c]) => (
+                {[["🔴 Lotado (100%)", VERMELHO], ["🟠 Crítico/Alto (≥88%)", LARANJA], ["🟢 Abaixo 88%", COR]].map(([l, c]) => (
                   <span key={l} style={{ color: c, fontWeight: 600 }}>{l}</span>
                 ))}
               </div>
             </>)}
           </div>
 
-          {/* Top 10 espera + professores resumo */}
           <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 20 }}>
             {card(<>
               {titulo("CMEIs — Lista de Espera INF 1–3 (todos)", "Vagas disponíveis vs crianças aguardando · ordenado por espera decrescente")}
@@ -406,19 +384,18 @@ export default function GGOrganizacaoPage() {
                 </div>
               </div>
             </>)}
-
             {card(<>
               {titulo("Dimensionamento — Resumo Executivo", "Professores necessários para completar o quadro em 2026")}
               <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
                 {[
-                  { label: "Prof. I — Infantil Regular", total: totalProfReg, aulas: totalAulasReg, cor: COR, desc: `${regular.length} CMEIs com lacuna — ${totalAulasReg} aulas descobertas (÷20 = professores)` },
-                  { label: "Prof. I — Creche (CMEI)", total: totalProfCre, aulas: totalAulasCre, cor: "#7c3371", desc: `${creche.length} CMEIs com lacuna — ${totalAulasCre} aulas descobertas` },
-                  { label: "TOTAL — Toda a rede", total: totalProfReg + totalProfCre, aulas: totalAulasReg + totalAulasCre, cor: VERMELHO, desc: "Professores necessários para suprir todas as lacunas" },
+                  { label: "Prof. I — Infantil Regular", total: totalProfReg, aulas: totalAulasReg, cor: COR,       desc: `${regular.length} CMEIs com lacuna — ${fmtN(totalAulasReg)} aulas descobertas (÷20 = professores)` },
+                  { label: "Prof. I — Creche (Infantil 1)", total: totalProfCre, aulas: totalAulasCre, cor: "#7c3371", desc: `${creche.length} CMEIs com lacuna — ${fmtN(totalAulasCre)} aulas descobertas` },
+                  { label: "TOTAL — Toda a rede",         total: totalProfReg + totalProfCre, aulas: totalAulasReg + totalAulasCre, cor: VERMELHO, desc: "Professores necessários para suprir todas as lacunas" },
                 ].map(k => (
                   <div key={k.label} style={{ background: COR_CLARA, borderRadius: 12, padding: "14px 16px", borderLeft: `4px solid ${k.cor}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div style={{ fontWeight: 700, fontSize: 13, color: k.cor }}>{k.label}</div>
-                      <div style={{ fontSize: 28, fontWeight: 900, color: k.cor }}>{k.total}</div>
+                      <div style={{ fontSize: 28, fontWeight: 900, color: k.cor }}>{fmtN(k.total)}</div>
                     </div>
                     <div style={{ fontSize: 10, color: "#64748b", marginTop: 4 }}>{k.desc}</div>
                   </div>
@@ -431,9 +408,8 @@ export default function GGOrganizacaoPage() {
           </div>
         </>}
 
-        {/* ══════════════════════════ VAGAS & OCUPAÇÃO ═════════════════════ */}
+        {/* ══ VAGAS & OCUPAÇÃO ══ */}
         {aba === "pntp" && <>
-
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 24 }}>
             {kpi("🏫", fmtN(pntp.length), "CMEIs", "Unidades 2026", COR)}
             {kpi("👶", fmtN(totalMat), "Matriculados", `${ocupGeralPct}% da capacidade`, COR)}
@@ -442,7 +418,6 @@ export default function GGOrganizacaoPage() {
             {kpi("⚠️", fmtN(totalEspera), "Na lista de espera", `INF1=${totalEsperaI1} INF2=${totalEsperaI2} INF3=${totalEsperaI3}`, VERMELHO, true)}
           </div>
 
-          {/* Gráfico todos CMEIs por ocupação */}
           {card(<>
             {titulo("CMEIs por Taxa de Ocupação (todos)", "Unidades com maior pressão sobre capacidade instalada · ordenado decrescente")}
             <div style={{ overflowY: "auto", maxHeight: 320 }}>
@@ -454,7 +429,7 @@ export default function GGOrganizacaoPage() {
                     <YAxis dataKey="nome" type="category" tick={{ fontSize: 9, fill: "#334155" }} width={185} />
                     <Tooltip formatter={(v, n) => [n === "ocupacao" ? `${v}%` : fmtN(v), n === "ocupacao" ? "Ocupação" : n]} />
                     <Bar dataKey="ocupacao" name="Ocupação %" radius={[0, 4, 4, 0]}>
-                      {todosOcupacao.map((d, i) => <Cell key={i} fill={corOcupacao(d.ocupacao)} />)}
+                      {todosOcupacao.map((d, i) => <Cell key={i} fill={corOcupacao(d.ocupacao, d.lotado)} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -462,7 +437,6 @@ export default function GGOrganizacaoPage() {
             </div>
           </>, { marginBottom: 24 })}
 
-          {/* Tabela completa PNTP */}
           {card(<>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
               <div>
@@ -470,37 +444,17 @@ export default function GGOrganizacaoPage() {
                 <div style={{ fontSize: 11, color: "#94a3b8" }}>
                   {pntpFiltrado.length} unidade(s) · Ordenado por lista de espera decrescente · * = informação adicional na planilha
                 </div>
-                <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>
-                  🔲 Colunas <b>Bairro</b> e <b>TGS</b> serão preenchidas automaticamente quando disponíveis na planilha
-                </div>
               </div>
-              <input
-                placeholder="🔍 Buscar CMEI..."
-                value={buscaPNTP}
-                onChange={e => setBuscaPNTP(e.target.value)}
-                style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${COR_BORDA}`, fontSize: 12, outline: "none", width: 200, color: "#334155" }}
-              />
+              <input placeholder="🔍 Buscar CMEI..." value={buscaPNTP} onChange={e => setBuscaPNTP(e.target.value)}
+                style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${COR_BORDA}`, fontSize: 12, outline: "none", width: 200, color: "#334155" }} />
             </div>
             <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 520 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
                 <thead style={{ position: "sticky", top: 0, background: "#fff", zIndex: 2 }}>
                   <tr style={{ borderBottom: `2px solid ${COR_CLARA}` }}>
-                    {[
-                      ["CMEI", "left", 200],
-                      ["TGS", "center", 60],
-                      ["BAIRRO", "left", 90],
-                      ["CAP.", "right", 55],
-                      ["MATRÍCULAS", "right", 80],
-                      ["OCUPAÇÃO", "center", 90],
-                      ["VAGAS I1", "right", 60],
-                      ["VAGAS I2", "right", 60],
-                      ["VAGAS I3", "right", 60],
-                      ["VAGAS I4", "right", 55],
-                      ["VAGAS I5", "right", 55],
-                      ["ESP. I1", "right", 60],
-                      ["ESP. I2", "right", 60],
-                      ["ESP. I3", "right", 60],
-                      ["TOTAL ESPERA", "right", 80],
+                    {[["CMEI","left",200],["TGS","center",60],["BAIRRO","left",90],["CAP.","right",55],["MATRÍCULAS","right",80],["OCUPAÇÃO","center",90],
+                      ["VAGAS I1","right",60],["VAGAS I2","right",60],["VAGAS I3","right",60],["VAGAS I4","right",55],["VAGAS I5","right",55],
+                      ["ESP. I1","right",60],["ESP. I2","right",60],["ESP. I3","right",60],["TOTAL ESPERA","right",80],
                     ].map(([h, align, w]) => (
                       <th key={h} style={{ textAlign: align, padding: "6px 8px", fontSize: 9, color: "#94a3b8", fontWeight: 700, letterSpacing: 0.6, whiteSpace: "nowrap", minWidth: w }}>{h}</th>
                     ))}
@@ -508,29 +462,23 @@ export default function GGOrganizacaoPage() {
                 </thead>
                 <tbody>
                   {pntpFiltrado.map((r, i) => {
-                    const badge = badgeOcup(r.ocupacao)
+                    const badge = badgeOcup(r.ocupacao, r.lotado)
                     return (
                       <tr key={i} style={{ borderBottom: `1px solid ${COR_CLARA}`, background: i % 2 === 0 ? "#fff" : "#fafff8" }}>
                         <td style={{ padding: "8px 8px", fontSize: 11, fontWeight: 600, color: "#334155", whiteSpace: "nowrap" }}>
-                          {r.asterisco && <span title="Informação adicional na planilha" style={{ marginRight: 4, color: LARANJA }}>*</span>}
+                          {r.asterisco && <span style={{ marginRight: 4, color: LARANJA }}>*</span>}
                           {r.cmei}
                         </td>
-                        {/* TGS — exibe quando preenchido */}
-                        <td style={{ padding: "8px 8px", textAlign: "center", fontSize: 10, color: r.tgs ? "#334155" : "#d1d5db" }}>
-                          {r.tgs || "—"}
-                        </td>
-                        {/* BAIRRO — exibe quando preenchido */}
-                        <td style={{ padding: "8px 8px", fontSize: 10, color: r.bairro ? "#334155" : "#d1d5db" }}>
-                          {r.bairro || "—"}
-                        </td>
+                        <td style={{ padding: "8px 8px", textAlign: "center", fontSize: 10, color: r.tgs ? "#334155" : "#d1d5db" }}>{r.tgs || "—"}</td>
+                        <td style={{ padding: "8px 8px", fontSize: 10, color: r.bairro ? "#334155" : "#d1d5db" }}>{r.bairro || "—"}</td>
                         <td style={{ padding: "8px 8px", fontSize: 11, textAlign: "right", color: "#334155" }}>{fmtN(r.cap)}</td>
                         <td style={{ padding: "8px 8px", fontSize: 11, textAlign: "right", fontWeight: 600, color: "#334155" }}>{fmtN(r.matric)}</td>
                         <td style={{ padding: "8px 8px", textAlign: "center" }}>
                           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                             <span style={{ background: badge.bg, color: badge.cor, borderRadius: 10, padding: "2px 8px", fontSize: 10, fontWeight: 700, display: "inline-block" }}>
-                              {r.ocupacao}% {badge.label}
+                              {r.lotado ? "100%" : `${r.ocupacao}%`} {badge.label}
                             </span>
-                            <BarraOcup pct={r.ocupacao} height={5} />
+                            <BarraOcup pct={r.ocupacao} lotado={r.lotado} height={5} />
                           </div>
                         </td>
                         {[r.vagaI1, r.vagaI2, r.vagaI3, r.vagaI4, r.vagaI5].map((v, j) => (
@@ -546,7 +494,6 @@ export default function GGOrganizacaoPage() {
                     )
                   })}
                 </tbody>
-                {/* Linha de totais */}
                 <tfoot style={{ position: "sticky", bottom: 0, background: COR_CLARA }}>
                   <tr style={{ borderTop: `2px solid ${COR_BORDA}` }}>
                     <td style={{ padding: "8px 8px", fontSize: 11, fontWeight: 800, color: COR }} colSpan={3}>TOTAL GERAL</td>
@@ -564,27 +511,24 @@ export default function GGOrganizacaoPage() {
                 </tfoot>
               </table>
             </div>
-          </>, { marginBottom: 0 })}
+          </>)}
         </>}
 
-        {/* ══════════════════════════ DIMENSIONAMENTO ══════════════════════ */}
+        {/* ══ DIMENSIONAMENTO ══ */}
         {aba === "prof" && <>
-
-          {/* KPIs */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
-            {kpi("📚", regular.length, "CMEIs com lacuna — Infantil Regular", "Educação infantil (Pré 1–3)", COR)}
-            {kpi("👶", creche.length, "CMEIs com lacuna — Creche", "Educação creche (0–3 anos)", "#7c3371")}
+            {kpi("📚", regular.length, "CMEIs com lacuna — Infantil Regular", "Educação infantil", COR)}
+            {kpi("👶", creche.length,  "CMEIs com lacuna — Infantil 1 (Creche)", "Berçário/Maternal", "#7c3371")}
             {kpi("👩‍🏫", fmtN(totalProfReg), "Prof. necessários — Regular", `${fmtN(totalAulasReg)} aulas descobertas ÷ 20`, COR)}
-            {kpi("👩‍🏫", fmtN(totalProfCre), "Prof. necessários — Creche", `${fmtN(totalAulasCre)} aulas descobertas ÷ 20`, "#7c3371")}
+            {kpi("👩‍🏫", fmtN(totalProfCre), "Prof. necessários — Infantil 1", `${fmtN(totalAulasCre)} aulas descobertas ÷ 20`, "#7c3371")}
           </div>
 
-          {/* Destaque total */}
           <div style={{ background: "#fff0f9", border: `2px solid #d946ef`, borderRadius: 14, padding: "16px 24px", marginBottom: 24, display: "flex", gap: 20, alignItems: "center" }}>
             <div style={{ fontSize: 48, fontWeight: 900, color: "#86198f", minWidth: 80, textAlign: "center" }}>{fmtN(totalProfReg + totalProfCre)}</div>
             <div>
               <div style={{ fontWeight: 800, fontSize: 16, color: "#86198f" }}>professores necessários para suprir todas as lacunas da rede em 2026</div>
               <div style={{ fontSize: 12, color: "#a21caf", marginTop: 4 }}>
-                {fmtN(totalProfReg)} para Infantil Regular ({regular.length} CMEIs) · {fmtN(totalProfCre)} para Creche ({creche.length} CMEIs) · {fmtN(totalAulasReg + totalAulasCre)} aulas totais descobertas
+                {fmtN(totalProfReg)} para Infantil Regular ({regular.length} CMEIs) · {fmtN(totalProfCre)} para Infantil 1/Creche ({creche.length} CMEIs) · {fmtN(totalAulasReg + totalAulasCre)} aulas totais descobertas
               </div>
               <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
                 <b>Metodologia:</b> Cada professor I tem carga de 20 aulas semanais. Aulas descobertas ÷ 20 = professores necessários.
@@ -592,10 +536,9 @@ export default function GGOrganizacaoPage() {
             </div>
           </div>
 
-          {/* Gráfico combinado top 10 + gráfico por tipo */}
           <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 20, marginBottom: 24 }}>
             {card(<>
-              {titulo("CMEIs — Necessidade de Professores (todos)", "Soma das lacunas Regular + Creche · ordenado decrescente")}
+              {titulo("CMEIs — Necessidade de Professores (todos)", "Soma das lacunas Regular + Infantil 1/Creche · ordenado decrescente")}
               <div style={{ overflowY: "auto", maxHeight: 320 }}>
                 <div style={{ height: todosProf.length * 32 + 20 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -606,26 +549,25 @@ export default function GGOrganizacaoPage() {
                       <Tooltip content={<TipCustom />} />
                       <Legend iconType="circle" iconSize={10} wrapperStyle={{ fontSize: 11 }} />
                       <Bar dataKey="reg" name="Infantil Regular" fill={COR}     stackId="a" radius={[0, 0, 0, 0]} />
-                      <Bar dataKey="cre" name="Creche"           fill="#7c3371" stackId="a" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="cre" name="Infantil 1/Creche" fill="#7c3371" stackId="a" radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             </>)}
-
             {card(<>
-              {titulo("Lacuna por Tipo", "Distribuição de necessidades entre Regular e Creche")}
+              {titulo("Lacuna por Tipo", "Distribuição de necessidades entre Regular e Infantil 1/Creche")}
               <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 12 }}>
                 {[
                   { tipo: "Infantil Regular", total: totalProfReg, aulas: totalAulasReg, cmeis: regular.length, cor: COR, desc: "Turmas de Pré I, II, III e Jardim" },
-                  { tipo: "Creche (CMEI)", total: totalProfCre, aulas: totalAulasCre, cmeis: creche.length, cor: "#7c3371", desc: "Turmas Berçário, Maternal I, II e III" },
+                  { tipo: "Infantil 1 / Creche", total: totalProfCre, aulas: totalAulasCre, cmeis: creche.length, cor: "#7c3371", desc: "Turmas Berçário, Maternal I, II e III" },
                 ].map(k => (
                   <div key={k.tipo} style={{ background: COR_CLARA, borderRadius: 12, padding: "16px 18px", borderLeft: `4px solid ${k.cor}` }}>
                     <div style={{ fontWeight: 700, color: k.cor, fontSize: 13, marginBottom: 6 }}>{k.tipo}</div>
                     <div style={{ fontSize: 10, color: "#64748b", marginBottom: 10 }}>{k.desc} · {k.cmeis} CMEIs com lacuna</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                       <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 28, fontWeight: 900, color: k.cor }}>{k.total}</div>
+                        <div style={{ fontSize: 28, fontWeight: 900, color: k.cor }}>{fmtN(k.total)}</div>
                         <div style={{ fontSize: 9, color: "#64748b" }}>professores</div>
                       </div>
                       <div style={{ textAlign: "center" }}>
@@ -639,64 +581,41 @@ export default function GGOrganizacaoPage() {
             </>)}
           </div>
 
-          {/* Tabela completa combinada */}
           {card(<>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14, color: COR }}>Detalhamento por CMEI — Professores necessários</div>
-                <div style={{ fontSize: 11, color: "#94a3b8" }}>
-                  {profFiltrado.length} unidade(s) com lacuna · ordenado por necessidade total decrescente
-                </div>
+                <div style={{ fontSize: 11, color: "#94a3b8" }}>{profFiltrado.length} unidade(s) com lacuna · ordenado por necessidade total decrescente</div>
               </div>
-              <input
-                placeholder="🔍 Buscar CMEI..."
-                value={buscaProf}
-                onChange={e => setBuscaProf(e.target.value)}
-                style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${COR_BORDA}`, fontSize: 12, outline: "none", width: 200, color: "#334155" }}
-              />
+              <input placeholder="🔍 Buscar CMEI..." value={buscaProf} onChange={e => setBuscaProf(e.target.value)}
+                style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${COR_BORDA}`, fontSize: 12, outline: "none", width: 200, color: "#334155" }} />
             </div>
             <div style={{ overflowY: "auto", maxHeight: 460 }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead style={{ position: "sticky", top: 0, background: "#fff", zIndex: 2 }}>
                   <tr style={{ borderBottom: `2px solid ${COR_CLARA}` }}>
-                    {[
-                      ["CMEI", "left"],
-                      ["AULAS REG.", "right"],
-                      ["PROF. REGULAR", "center"],
-                      ["AULAS CRECHE", "right"],
-                      ["PROF. CRECHE", "center"],
-                      ["TOTAL PROF.", "center"],
-                    ].map(([h, align]) => (
+                    {[["CMEI","left"],["AULAS REG.","right"],["PROF. REGULAR","center"],["AULAS INF.1","right"],["PROF. INF.1","center"],["TOTAL PROF.","center"]].map(([h, align]) => (
                       <th key={h} style={{ textAlign: align, padding: "6px 12px", fontSize: 10, color: "#94a3b8", fontWeight: 700, letterSpacing: 0.6, whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {profFiltrado.map((r, i) => {
-                    // Busca aulas originais
-                    const rRaw = regular.find(x => x.escola === r.escola.replace("…","")) || {}
-                    const cRaw = creche.find(x => x.escola === r.escola.replace("…","")) || {}
-                    return (
-                      <tr key={i} style={{ borderBottom: `1px solid ${COR_CLARA}`, background: i % 2 === 0 ? "#fff" : "#fafff8" }}>
-                        <td style={{ padding: "9px 12px", fontSize: 11, fontWeight: 600, color: "#334155" }}>{r.escola}</td>
-                        <td style={{ padding: "9px 12px", fontSize: 11, textAlign: "right", color: r.reg > 0 ? "#64748b" : "#d1d5db" }}>{r.reg > 0 ? fmtN(rRaw.aulas || r.reg * 20) : "—"}</td>
-                        <td style={{ padding: "9px 12px", textAlign: "center" }}>
-                          {r.reg > 0 ? (
-                            <span style={{ background: COR_CLARA, color: COR, borderRadius: 20, padding: "2px 12px", fontSize: 12, fontWeight: 800 }}>{r.reg}</span>
-                          ) : <span style={{ color: "#d1d5db" }}>—</span>}
-                        </td>
-                        <td style={{ padding: "9px 12px", fontSize: 11, textAlign: "right", color: r.cre > 0 ? "#64748b" : "#d1d5db" }}>{r.cre > 0 ? fmtN(cRaw.aulas || r.cre * 20) : "—"}</td>
-                        <td style={{ padding: "9px 12px", textAlign: "center" }}>
-                          {r.cre > 0 ? (
-                            <span style={{ background: "#fdf4ff", color: "#7c3371", borderRadius: 20, padding: "2px 12px", fontSize: 12, fontWeight: 800 }}>{r.cre}</span>
-                          ) : <span style={{ color: "#d1d5db" }}>—</span>}
-                        </td>
-                        <td style={{ padding: "9px 12px", textAlign: "center" }}>
-                          <span style={{ background: r.total >= 15 ? "#fee2e2" : r.total >= 8 ? "#fef9c3" : "#dcfce7", color: r.total >= 15 ? VERMELHO : r.total >= 8 ? LARANJA : COR, borderRadius: 20, padding: "3px 14px", fontSize: 13, fontWeight: 900 }}>{r.total}</span>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {profFiltrado.map((r, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${COR_CLARA}`, background: i % 2 === 0 ? "#fff" : "#fafff8" }}>
+                      <td style={{ padding: "9px 12px", fontSize: 11, fontWeight: 600, color: "#334155" }}>{r.escola}</td>
+                      <td style={{ padding: "9px 12px", fontSize: 11, textAlign: "right", color: r.reg > 0 ? "#64748b" : "#d1d5db" }}>{r.reg > 0 ? fmtN(r.aulasReg) : "—"}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "center" }}>
+                        {r.reg > 0 ? <span style={{ background: COR_CLARA, color: COR, borderRadius: 20, padding: "2px 12px", fontSize: 12, fontWeight: 800 }}>{r.reg}</span> : <span style={{ color: "#d1d5db" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "9px 12px", fontSize: 11, textAlign: "right", color: r.cre > 0 ? "#64748b" : "#d1d5db" }}>{r.cre > 0 ? fmtN(r.aulasCre) : "—"}</td>
+                      <td style={{ padding: "9px 12px", textAlign: "center" }}>
+                        {r.cre > 0 ? <span style={{ background: "#fdf4ff", color: "#7c3371", borderRadius: 20, padding: "2px 12px", fontSize: 12, fontWeight: 800 }}>{r.cre}</span> : <span style={{ color: "#d1d5db" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "9px 12px", textAlign: "center" }}>
+                        <span style={{ background: r.total >= 15 ? "#fee2e2" : r.total >= 8 ? "#fef9c3" : "#dcfce7", color: r.total >= 15 ? VERMELHO : r.total >= 8 ? LARANJA : COR, borderRadius: 20, padding: "3px 14px", fontSize: 13, fontWeight: 900 }}>{r.total}</span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
                 <tfoot style={{ position: "sticky", bottom: 0, background: COR_CLARA }}>
                   <tr style={{ borderTop: `2px solid ${COR_BORDA}` }}>
@@ -712,7 +631,7 @@ export default function GGOrganizacaoPage() {
                 </tfoot>
               </table>
             </div>
-          </>, { marginBottom: 0 })}
+          </>)}
         </>}
 
         <div style={{ textAlign: "center", fontSize: 10, color: "#94a3b8", paddingTop: 18 }}>
