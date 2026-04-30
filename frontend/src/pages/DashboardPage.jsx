@@ -143,7 +143,7 @@ const gerencias = [
     id: 8,
     nome: "Gerência Geral do Centro de Distribuição",
     rota: "/gg-centro-distribuicao",
-    descricao: "Gerencia o recebimento, armazenamento e distribuição de materiais e insumos para a rede.",
+    descricao: "",
     atribuicoes: [],
     icone: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
