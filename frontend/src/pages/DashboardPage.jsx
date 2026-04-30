@@ -143,7 +143,7 @@ const gerencias = [
     id: 8,
     nome: "Gerência Geral do Centro de Distribuição",
     rota: "/gg-centro-distribuicao",
-    descricao: "",
+    descricao: "Gerencia o recebimento, armazenamento e distribuição de materiais e insumos para a rede.",
     atribuicoes: [],
     icone: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -300,16 +300,14 @@ export default function DashboardPage() {
 
       <Header titulo="SEDUC" sub="Secretaria de Educação e Esportes de Caruaru" />
 
-      <div style={{ padding: "2.5rem 3rem 0", paddingTop: "calc(64px + 2.5rem)" }}>
-        <h2 style={{ fontSize: "22px", fontWeight: "700", color: "#1a2e1a", margin: 0 }}>Gerências</h2>
-        <p style={{ fontSize: "13px", color: "#888", marginTop: "4px" }}>
-          Selecione uma gerência para acessar suas funções
-        </p>
-        <div style={{ height: "3px", width: "48px", background: "#2d6a2d", borderRadius: "2px", marginTop: "12px" }} />
-      </div>
-
-      {/* Botão organograma */}
-      <div style={{ padding: "0 3rem", marginTop: "8px" }}>
+      <div style={{ padding: "2.5rem 3rem 0", paddingTop: "calc(64px + 2.5rem)", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+        <div>
+          <h2 style={{ fontSize: "22px", fontWeight: "700", color: "#1a2e1a", margin: 0 }}>Gerências</h2>
+          <p style={{ fontSize: "13px", color: "#888", marginTop: "4px" }}>
+            Selecione uma gerência para acessar suas funções
+          </p>
+          <div style={{ height: "3px", width: "48px", background: "#2d6a2d", borderRadius: "2px", marginTop: "12px" }} />
+        </div>
         <button
           onClick={() => setMostraOrganograma(true)}
           style={{
@@ -317,7 +315,7 @@ export default function DashboardPage() {
             padding: "8px 18px", borderRadius: "20px",
             border: "1.5px solid #2d6a2d", background: "#fff",
             color: "#2d6a2d", fontSize: "13px", fontWeight: "600",
-            cursor: "pointer", transition: "background 0.15s",
+            cursor: "pointer", transition: "background 0.15s", whiteSpace: "nowrap",
           }}
           onMouseEnter={e => e.currentTarget.style.background = "#f0f7f0"}
           onMouseLeave={e => e.currentTarget.style.background = "#fff"}
@@ -337,6 +335,7 @@ export default function DashboardPage() {
         </button>
       </div>
 
+      {/* Botão organograma */}
       {/* Popover organograma */}
       {mostraOrganograma && (
         <>
